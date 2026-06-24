@@ -3,7 +3,7 @@
 import { useWealthOS } from '@/lib/wealthos/store';
 import { computeKPIs, fmtCurrency, fmtPct, computeAllocation, ASSET_CATEGORY_META } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar, RingScore } from '../Primitives';
-import { Users, User, Heart, GraduationCap, Baby, Plus, Trash2 } from 'lucide-react';
+import { Users, User, Heart, GraduationCap, Baby, Plus, Trash2, PencilLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,9 +63,12 @@ export function FamilyView() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground truncate">{m.name}</span>
-                      <button onClick={() => useWealthOS.getState().removeFamilyMember(m.id)} className="text-muted-foreground hover:text-rose-400 p-0.5">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <EditMemberButton member={m} />
+                        <button onClick={() => useWealthOS.getState().removeFamilyMember(m.id)} className="text-muted-foreground hover:text-rose-400 p-0.5">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{m.relationship}</span>
@@ -112,20 +115,58 @@ export function FamilyView() {
 }
 
 function AddMemberDialog() {
+  return <MemberDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add Member</Button>
+  } />;
+}
+
+function EditMemberButton({ member }: { member: FamilyMember }) {
+  return <MemberDialog mode="edit" member={member} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-0.5" title="Edit member">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function MemberDialog({ mode, member, trigger }: { mode: 'add' | 'edit'; member?: FamilyMember; trigger: React.ReactNode }) {
   const addFamilyMember = useWealthOS(s => s.addFamilyMember);
+  const updateFamilyMember = useWealthOS(s => s.updateFamilyMember);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', relationship: 'child' as FamilyMember['relationship'], age: '', dependent: true });
+
+  const handleOpenChange = (v: boolean) => {
+    if (v && member) {
+      setForm({
+        name: member.name,
+        relationship: member.relationship,
+        age: member.age.toString(),
+        dependent: member.dependent,
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.name || !form.age) return;
-    addFamilyMember({ name: form.name, relationship: form.relationship, age: parseInt(form.age) || 0, dependent: form.dependent });
-    setForm({ name: '', relationship: 'child', age: '', dependent: true });
+    const payload = {
+      name: form.name,
+      relationship: form.relationship,
+      age: parseInt(form.age) || 0,
+      dependent: form.dependent,
+    };
+    if (mode === 'edit' && member) {
+      updateFamilyMember(member.id, payload);
+    } else {
+      addFamilyMember(payload);
+    }
     setOpen(false);
   };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add Member</Button></DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-sm">
-        <DialogHeader><DialogTitle className="text-amber-400">Add Family Member</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Family Member' : 'Add Family Member'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs text-muted-foreground">Name</Label>
@@ -164,7 +205,9 @@ function AddMemberDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

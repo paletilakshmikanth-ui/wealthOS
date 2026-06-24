@@ -14,7 +14,7 @@ import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar, RingSc
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import {
   FileText, Landmark, UserCheck, FileSignature, HeartPulse, Users,
-  Plus, Trash2, Shield, CheckCircle2, AlertTriangle, Scale, Baby, Crown,
+  Plus, Trash2, Shield, CheckCircle2, AlertTriangle, Scale, Baby, Crown, PencilLine,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import type { EstateDocumentType, EstateStatus, Beneficiary } from '@/lib/wealthos/types';
+import type { EstateDocument, EstateDocumentType, EstateStatus, Beneficiary } from '@/lib/wealthos/types';
 
 const DOC_ICON: Record<string, React.ElementType> = {
   will: FileText, trust: Landmark, nomination: UserCheck,
@@ -105,9 +105,12 @@ export function EstateView() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-medium text-foreground truncate">{d.title}</span>
-                        <button onClick={() => useWealthOS.getState().removeEstateDocument(d.id)} className="text-muted-foreground hover:text-rose-400 p-1 shrink-0">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <EditEstateDocumentButton doc={d} />
+                          <button onClick={() => useWealthOS.getState().removeEstateDocument(d.id)} className="text-muted-foreground hover:text-rose-400 p-1">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] text-muted-foreground">{meta.label}</span>
@@ -154,6 +157,7 @@ export function EstateView() {
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ['#d4af37', '#34d399', '#38bdf8', '#a78bfa', '#fb923c', '#f43f5e'][i % 6] }} />
                   <span className="flex-1 truncate text-muted-foreground">{b.name}</span>
                   <span className="font-mono text-foreground">{b.sharePct.toFixed(0)}%</span>
+                  <EditBeneficiaryButton beneficiary={b} />
                   <button onClick={() => useWealthOS.getState().removeBeneficiary(b.id)} className="text-muted-foreground hover:text-rose-400">
                     <Trash2 className="w-2.5 h-2.5" />
                   </button>
@@ -239,7 +243,24 @@ function Hero({ label, value, icon: Icon, tone }: { label: string; value: string
 }
 
 function AddDocumentDialog() {
+  return <EstateDocumentDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+      <Plus className="w-3.5 h-3.5 mr-1" /> Add Document
+    </Button>
+  } />;
+}
+
+function EditEstateDocumentButton({ doc }: { doc: EstateDocument }) {
+  return <EstateDocumentDialog mode="edit" doc={doc} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1 shrink-0" title="Edit document">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function EstateDocumentDialog({ mode, doc, trigger }: { mode: 'add' | 'edit'; doc?: EstateDocument; trigger: React.ReactNode }) {
   const addEstateDocument = useWealthOS(s => s.addEstateDocument);
+  const updateEstateDocument = useWealthOS(s => s.updateEstateDocument);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     type: 'will' as EstateDocumentType,
@@ -248,31 +269,50 @@ function AddDocumentDialog() {
     notes: '',
   });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && doc) {
+      setForm({
+        type: doc.type,
+        title: doc.title,
+        status: doc.status,
+        notes: doc.notes || '',
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.title) return;
-    addEstateDocument({
+    const payload = {
       type: form.type,
       title: form.title,
       status: form.status,
       lastUpdated: new Date().toISOString().slice(0, 10),
       nextReviewDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       notes: form.notes,
-      attachmentsCount: 0,
-    });
-    setForm({ type: 'will', title: '', status: 'drafted', notes: '' });
+      attachmentsCount: doc?.attachmentsCount || 0,
+    };
+    if (mode === 'edit' && doc) {
+      // Preserve existing lastUpdated/nextReviewDate if user is editing
+      updateEstateDocument(doc.id, {
+        type: form.type,
+        title: form.title,
+        status: form.status,
+        lastUpdated: new Date().toISOString().slice(0, 10),
+        notes: form.notes,
+      });
+    } else {
+      addEstateDocument(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
-          <Plus className="w-3.5 h-3.5 mr-1" /> Add Document
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-amber-400">Add Estate Document</DialogTitle>
+          <DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Estate Document' : 'Add Estate Document'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -306,7 +346,9 @@ function AddDocumentDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -314,33 +356,62 @@ function AddDocumentDialog() {
 }
 
 function AddBeneficiaryDialog() {
+  return <BeneficiaryDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+      <Plus className="w-3.5 h-3.5 mr-1" /> Add Beneficiary
+    </Button>
+  } />;
+}
+
+function EditBeneficiaryButton({ beneficiary }: { beneficiary: Beneficiary }) {
+  return <BeneficiaryDialog mode="edit" beneficiary={beneficiary} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-0.5" title="Edit beneficiary">
+      <PencilLine className="w-2.5 h-2.5" />
+    </button>
+  } />;
+}
+
+function BeneficiaryDialog({ mode, beneficiary, trigger }: { mode: 'add' | 'edit'; beneficiary?: Beneficiary; trigger: React.ReactNode }) {
   const addBeneficiary = useWealthOS(s => s.addBeneficiary);
+  const updateBeneficiary = useWealthOS(s => s.updateBeneficiary);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', relationship: '', sharePct: '', notes: '' });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && beneficiary) {
+      setForm({
+        name: beneficiary.name,
+        relationship: beneficiary.relationship,
+        sharePct: beneficiary.sharePct.toString(),
+        notes: beneficiary.notes || '',
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.name || !form.sharePct) return;
-    addBeneficiary({
+    const payload = {
       name: form.name,
       relationship: form.relationship || 'Other',
       sharePct: parseFloat(form.sharePct) || 0,
-      assetIds: [],
+      assetIds: beneficiary?.assetIds || [],
       notes: form.notes,
-    });
-    setForm({ name: '', relationship: '', sharePct: '', notes: '' });
+    };
+    if (mode === 'edit' && beneficiary) {
+      updateBeneficiary(beneficiary.id, payload);
+    } else {
+      addBeneficiary(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
-          <Plus className="w-3.5 h-3.5 mr-1" /> Add Beneficiary
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-amber-400">Add Beneficiary</DialogTitle>
+          <DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Beneficiary' : 'Add Beneficiary'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -364,7 +435,9 @@ function AddBeneficiaryDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

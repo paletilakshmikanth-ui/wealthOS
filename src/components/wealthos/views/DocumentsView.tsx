@@ -8,7 +8,7 @@ import {
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar } from '../Primitives';
 import {
   FolderPlus, FileText, Lock, Search, Plus, Trash2, Shield, Tag, Calendar, Download, Eye,
-  AlertTriangle, FileCheck, Database,
+  AlertTriangle, FileCheck, Database, PencilLine,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -142,6 +142,7 @@ export function DocumentsView() {
                     <button onClick={() => toast.success('Downloading (decrypted)...', { description: d.name })} className="text-muted-foreground hover:text-amber-400 p-1">
                       <Download className="w-3 h-3" />
                     </button>
+                    <EditDocumentButton doc={d} />
                     <button onClick={() => useWealthOS.getState().removeDocument(d.id)} className="text-muted-foreground hover:text-rose-400 p-1">
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -202,7 +203,24 @@ export function DocumentsView() {
 }
 
 function AddDocumentDialog() {
+  return <VaultDocumentDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+      <Plus className="w-3.5 h-3.5 mr-1" /> Add Document
+    </Button>
+  } />;
+}
+
+function EditDocumentButton({ doc }: { doc: VaultDocument }) {
+  return <VaultDocumentDialog mode="edit" doc={doc} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1" title="Edit document">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function VaultDocumentDialog({ mode, doc, trigger }: { mode: 'add' | 'edit'; doc?: VaultDocument; trigger: React.ReactNode }) {
   const addDocument = useWealthOS(s => s.addDocument);
+  const updateDocument = useWealthOS(s => s.updateDocument);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -215,9 +233,25 @@ function AddDocumentDialog() {
     sizeBytes: '500000',
   });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && doc) {
+      setForm({
+        name: doc.name,
+        category: doc.category,
+        issuer: doc.issuer || '',
+        documentDate: doc.documentDate || new Date().toISOString().slice(0, 10),
+        expiryDate: doc.expiryDate || '',
+        tags: doc.tags.join(', '),
+        notes: doc.notes || '',
+        sizeBytes: doc.sizeBytes.toString(),
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.name) return;
-    addDocument({
+    const payload = {
       name: form.name,
       category: form.category,
       issuer: form.issuer || undefined,
@@ -227,23 +261,24 @@ function AddDocumentDialog() {
       encrypted: true,
       sizeBytes: parseInt(form.sizeBytes) || 0,
       notes: form.notes || undefined,
-      addedAt: new Date().toISOString(),
-    });
-    setForm({ name: '', category: 'tax', issuer: '', documentDate: new Date().toISOString().slice(0, 10), expiryDate: '', tags: '', notes: '', sizeBytes: '500000' });
+      addedAt: doc?.addedAt || new Date().toISOString(),
+    };
+    if (mode === 'edit' && doc) {
+      updateDocument(doc.id, payload);
+      toast.success('Document updated', { description: form.name });
+    } else {
+      addDocument(payload);
+      toast.success('Document added', { description: 'Encrypted and stored locally.' });
+    }
     setOpen(false);
-    toast.success('Document added', { description: 'Encrypted and stored locally.' });
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
-          <Plus className="w-3.5 h-3.5 mr-1" /> Add Document
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-amber-400">Add Document to Vault</DialogTitle>
+          <DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Document' : 'Add Document to Vault'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -286,7 +321,9 @@ function AddDocumentDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add & Encrypt</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add & Encrypt'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
