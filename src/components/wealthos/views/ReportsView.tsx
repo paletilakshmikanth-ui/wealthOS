@@ -1,7 +1,7 @@
 'use client';
 
 import { useWealthOS } from '@/lib/wealthos/store';
-import { computeKPIs, computeFIRE, computeRetirement, generateInsights, computeAllocation, fmtCurrency, fmtPct, fmtDuration, ASSET_CATEGORY_META } from '@/lib/wealthos/engine';
+import { computeKPIs, computeFIRE, computeRetirement, generateInsights, computeAllocation, fmtCurrency, fmtPct, fmtDuration, ASSET_CATEGORY_META, generateReportHTML, downloadReport } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, RingScore } from '../Primitives';
 import { FileText, Download, Crown, PiggyBank, TrendingUp, Shield, Receipt, Users, Briefcase, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,11 @@ export function ReportsView() {
   const sym = state.settings.currencySymbol;
 
   const handleDownload = (type: string) => {
+    const html = generateReportHTML(state, type);
+    const filename = `${type.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.html`;
+    downloadReport(html, filename);
     toast.success(`${type} report generated`, {
-      description: 'Report would be downloaded as PDF in production.',
+      description: `Downloaded as ${filename}`,
     });
   };
 

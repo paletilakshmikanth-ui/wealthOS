@@ -15,6 +15,10 @@ export type ViewId =
   | 'insurance'
   | 'taxes'
   | 'family'
+  | 'children'
+  | 'eldercare'
+  | 'estate'
+  | 'documents'
   | 'calculators'
   | 'simulation'
   | 'insights'
@@ -193,6 +197,146 @@ export interface NetWorthSnapshot {
   liabilities: number;
 }
 
+// ============================================================
+// Estate Planning
+// ============================================================
+
+export type EstateDocumentType =
+  | 'will'
+  | 'trust'
+  | 'nomination'
+  | 'power_of_attorney'
+  | 'medical_directive'
+  | 'succession_plan';
+
+export type EstateStatus = 'not_started' | 'drafted' | 'registered' | 'outdated';
+
+export interface EstateDocument {
+  id: string;
+  type: EstateDocumentType;
+  title: string;
+  status: EstateStatus;
+  lastUpdated: string;
+  nextReviewDate?: string;
+  notes?: string;
+  attachmentsCount: number;
+}
+
+export interface Beneficiary {
+  id: string;
+  name: string;
+  relationship: string;
+  sharePct: number;       // % of estate
+  assetIds: string[];     // specific assets nominated
+  notes?: string;
+}
+
+export interface EstatePlan {
+  documents: EstateDocument[];
+  beneficiaries: Beneficiary[];
+  executorName?: string;
+  guardianName?: string;  // for minor children
+  trustSetup: boolean;
+  hasRegisteredWill: boolean;
+}
+
+// ============================================================
+// Children & Elder Care Planning
+// ============================================================
+
+export type ChildMilestone =
+  | 'primary_education'
+  | 'secondary_education'
+  | 'higher_education'
+  | 'marriage'
+  | 'business_seed'
+  | 'first_home';
+
+export interface ChildPlan {
+  id: string;
+  childId: string;       // ref to FamilyMember
+  childName: string;
+  currentAge: number;
+  milestones: {
+    id: string;
+    type: ChildMilestone;
+    ageAtMilestone: number;
+    targetAmount: number;       // future value (inflated)
+    currentCorpus: number;
+    monthlyContribution: number;
+    expectedReturnRate: number;
+  }[];
+}
+
+export type ElderCareNeed =
+  | 'medical'
+  | 'housing'
+  | 'caregiver'
+  | 'insurance'
+  | 'monthly_support'
+  | 'emergency_fund';
+
+export interface ElderCarePlan {
+  id: string;
+  elderId: string;       // ref to FamilyMember
+  elderName: string;
+  age: number;
+  monthlySupport: number;
+  annualMedicalCost: number;
+  insuranceCoverage: number;
+  needs: {
+    id: string;
+    type: ElderCareNeed;
+    description: string;
+    annualCost: number;
+    inflationRate: number;
+    yearsNeeded: number;
+  }[];
+}
+
+// ============================================================
+// Document Vault
+// ============================================================
+
+export type DocumentCategory =
+  | 'tax'
+  | 'insurance'
+  | 'loan'
+  | 'property'
+  | 'investment'
+  | 'legal'
+  | 'estate'
+  | 'identity'
+  | 'other';
+
+export interface VaultDocument {
+  id: string;
+  name: string;
+  category: DocumentCategory;
+  issuer?: string;
+  documentDate?: string;
+  expiryDate?: string;
+  tags: string[];
+  encrypted: boolean;
+  sizeBytes: number;
+  notes?: string;
+  addedAt: string;
+  // In a real Flutter app this would be the file path/hash on device storage.
+  // In the web preview we store metadata only.
+  reference?: string;
+}
+
+// ============================================================
+// Authentication
+// ============================================================
+
+export interface AuthState {
+  pinHash?: string;        // SHA-256 hash of PIN, never store raw
+  biometricEnabled: boolean;
+  autoLockMinutes: number;
+  hint?: string;
+}
+
 export interface WealthOSState {
   settings: Settings;
   assets: Asset[];
@@ -204,6 +348,11 @@ export interface WealthOSState {
   family: FamilyMember[];
   netWorthHistory: NetWorthSnapshot[];
   activeView: ViewId;
+  estatePlan: EstatePlan;
+  childPlans: ChildPlan[];
+  elderCarePlans: ElderCarePlan[];
+  documents: VaultDocument[];
+  auth: AuthState;
 }
 
 export interface KPIMetrics {

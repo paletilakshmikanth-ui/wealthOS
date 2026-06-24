@@ -8,6 +8,9 @@ import type {
   AssetAllocation,
   AssetCategory,
   CashFlowBreakdown,
+  ChildPlan,
+  ElderCarePlan,
+  EstatePlan,
   FIRCEResult,
   Goal,
   IncomeSource,
@@ -934,3 +937,334 @@ export const fmtDuration = (years: number): string => {
   if (y === 0) return `${m} months`;
   return m > 0 ? `${y}y ${m}m` : `${y} years`;
 };
+
+// ============================================================
+// Estate Planning Engine
+// ============================================================
+
+export const ESTATE_DOC_META: Record<string, { label: string; icon: string; description: string }> = {
+  will:                { label: 'Will',                    icon: 'FileText',  description: 'Legal document specifying asset distribution after death' },
+  trust:               { label: 'Trust',                   icon: 'Landmark',  description: 'Legal entity holding assets for beneficiaries' },
+  nomination:          { label: 'Nomination',              icon: 'UserCheck', description: 'Nominee registered on specific assets/accounts' },
+  power_of_attorney:   { label: 'Power of Attorney',       icon: 'FileSignature', description: 'Authorizes another to act on your behalf' },
+  medical_directive:   { label: 'Medical Directive',       icon: 'HeartPulse', description: 'Healthcare wishes if you become incapacitated' },
+  succession_plan:     { label: 'Succession Plan',         icon: 'Users',     description: 'Business succession & leadership transition plan' },
+};
+
+export const ESTATE_STATUS_META: Record<string, { label: string; color: string }> = {
+  not_started: { label: 'Not Started', color: 'oklch(0.65 0.22 22)'  },
+  drafted:     { label: 'Drafted',     color: 'oklch(0.78 0.15 70)'  },
+  registered:  { label: 'Registered',  color: 'oklch(0.72 0.18 152)' },
+  outdated:    { label: 'Outdated',    color: 'oklch(0.65 0.22 22)'  },
+};
+
+export const computeEstateReadiness = (plan: EstatePlan): {
+  score: number;
+  rating: string;
+  checks: { label: string; passed: boolean; weight: number }[];
+} => {
+  const checks: { label: string; passed: boolean; weight: number }[] = [
+    { label: 'Registered Will in place',         passed: plan.documents.some(d => d.type === 'will' && d.status === 'registered'), weight: 25 },
+    { label: 'At least 3 beneficiaries nominated', passed: plan.beneficiaries.length >= 3, weight: 15 },
+    { label: 'Beneficiary shares total 100%',    passed: Math.abs(plan.beneficiaries.reduce((s, b) => s + b.sharePct, 0) - 100) < 0.5, weight: 15 },
+    { label: 'Trust structure set up',           passed: plan.trustSetup, weight: 10 },
+    { label: 'Executor designated',              passed: !!plan.executorName, weight: 10 },
+    { label: 'Guardian for minor children',      passed: !!plan.guardianName, weight: 10 },
+    { label: 'Power of Attorney in place',       passed: plan.documents.some(d => d.type === 'power_of_attorney' && d.status !== 'not_started'), weight: 8 },
+    { label: 'Medical directive',                passed: plan.documents.some(d => d.type === 'medical_directive' && d.status !== 'not_started'), weight: 7 },
+  ];
+  let score = 0;
+  for (const c of checks) if (c.passed) score += c.weight;
+  score = Math.min(100, score);
+  const rating = score >= 85 ? 'Elite' : score >= 70 ? 'Excellent' : score >= 55 ? 'Good' : score >= 40 ? 'Average' : 'Poor';
+  return { score, rating, checks };
+};
+
+// ============================================================
+// Children Planning Engine
+// ============================================================
+
+export const CHILD_MILESTONE_META: Record<string, { label: string; defaultAge: number; inflationPct: number }> = {
+  primary_education:   { label: 'Primary Education',   defaultAge: 6,  inflationPct: 8  },
+  secondary_education: { label: 'Secondary Education', defaultAge: 16, inflationPct: 8  },
+  higher_education:    { label: 'Higher Education',    defaultAge: 18, inflationPct: 10 },
+  marriage:            { label: 'Marriage',            defaultAge: 28, inflationPct: 7  },
+  business_seed:       { label: 'Business Seed Fund',  defaultAge: 25, inflationPct: 6  },
+  first_home:          { label: 'First Home',          defaultAge: 30, inflationPct: 6  },
+};
+
+export const projectChildMilestone = (
+  milestone: ChildPlan['milestones'][number],
+  currentAge: number,
+  inflationRate: number,
+): {
+  yearsToMilestone: number;
+  futureValue: number;
+  projectedCorpus: number;
+  shortfall: number;
+  requiredMonthlyContribution: number;
+  onTrack: boolean;
+} => {
+  const yearsToMilestone = Math.max(0, milestone.ageAtMilestone - currentAge);
+  const months = yearsToMilestone * 12;
+  // Inflate current target to future value
+  const futureValue = milestone.targetAmount * Math.pow(1 + inflationRate / 100, yearsToMilestone);
+  // Project current corpus
+  const rM = (milestone.expectedReturnRate / 100) / 12;
+  const projectedCorpus = milestone.currentCorpus * Math.pow(1 + rM, months) +
+    milestone.monthlyContribution * (rM > 0 ? ((Math.pow(1 + rM, months) - 1) / rM) : months);
+  const shortfall = Math.max(0, futureValue - projectedCorpus);
+  const futureValueOfCurrent = milestone.currentCorpus * Math.pow(1 + rM, months);
+  const requiredMonthlyContribution = rM > 0 && months > 0
+    ? ((futureValue - futureValueOfCurrent) * rM) / (Math.pow(1 + rM, months) - 1)
+    : months > 0 ? (futureValue - futureValueOfCurrent) / months : 0;
+  return {
+    yearsToMilestone,
+    futureValue,
+    projectedCorpus,
+    shortfall,
+    requiredMonthlyContribution: Math.max(0, requiredMonthlyContribution),
+    onTrack: projectedCorpus >= futureValue * 0.95,
+  };
+};
+
+// ============================================================
+// Elder Care Engine
+// ============================================================
+
+export const ELDER_CARE_NEED_META: Record<string, { label: string; defaultInflation: number }> = {
+  medical:          { label: 'Medical Care',       defaultInflation: 10 },
+  housing:          { label: 'Housing / Rent',     defaultInflation: 6  },
+  caregiver:        { label: 'Caregiver',          defaultInflation: 8  },
+  insurance:        { label: 'Insurance Premium',  defaultInflation: 12 },
+  monthly_support:  { label: 'Monthly Support',    defaultInflation: 6  },
+  emergency_fund:   { label: 'Emergency Fund',     defaultInflation: 5  },
+};
+
+export const projectElderCare = (plan: ElderCarePlan): {
+  totalAnnualCostToday: number;
+  totalLifetimeCost: number;
+  totalInflatedAnnual: number;
+  insuranceGap: number;
+} => {
+  const totalAnnualCostToday = plan.needs.reduce((s, n) => s + n.annualCost, 0) + plan.monthlySupport * 12;
+  let totalLifetimeCost = 0;
+  let totalInflatedAnnual = 0;
+  for (const n of plan.needs) {
+    for (let y = 0; y < n.yearsNeeded; y++) {
+      totalLifetimeCost += n.annualCost * Math.pow(1 + n.inflationRate / 100, y);
+    }
+    totalInflatedAnnual += n.annualCost * Math.pow(1 + n.inflationRate / 100, 5);
+  }
+  // Insurance gap = lifetime cost - insurance coverage
+  const insuranceGap = Math.max(0, totalLifetimeCost - plan.insuranceCoverage);
+  return {
+    totalAnnualCostToday,
+    totalLifetimeCost,
+    totalInflatedAnnual,
+    insuranceGap,
+  };
+};
+
+// ============================================================
+// Document Vault
+// ============================================================
+
+export const DOCUMENT_CATEGORY_META: Record<string, { label: string; color: string }> = {
+  tax:        { label: 'Tax Documents',     color: 'oklch(0.78 0.15 70)'  },
+  insurance:  { label: 'Insurance Policies', color: 'oklch(0.72 0.18 152)' },
+  loan:       { label: 'Loan Agreements',    color: 'oklch(0.65 0.22 22)'  },
+  property:   { label: 'Property Records',   color: 'oklch(0.68 0.13 220)' },
+  investment: { label: 'Investment Statements', color: 'oklch(0.78 0.13 75)' },
+  legal:      { label: 'Legal Documents',    color: 'oklch(0.74 0.20 295)' },
+  estate:     { label: 'Estate Documents',   color: 'oklch(0.78 0.15 200)' },
+  identity:   { label: 'Identity Documents', color: 'oklch(0.72 0.18 152)' },
+  other:      { label: 'Other',              color: 'oklch(0.60 0.02 240)' },
+};
+
+export const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};
+
+// ============================================================
+// Authentication (PIN Hashing — SHA-256)
+// ============================================================
+
+export const hashPin = async (pin: string): Promise<string> => {
+  // Use Web Crypto API — available in browsers and Node 20+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`wealthos-salt::${pin}`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+export const verifyPin = async (pin: string, hash: string): Promise<boolean> => {
+  const computed = await hashPin(pin);
+  return computed === hash;
+};
+
+// Synchronous fallback for cases where async isn't viable (not cryptographic-grade but adequate for demo)
+export const hashPinSync = (pin: string): string => {
+  let h = 0x811c9dc5;
+  const s = `wealthos-salt::${pin}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  // Add a second pass for more dispersion
+  let h2 = 0xdeadbeef;
+  for (let i = 0; i < s.length; i++) {
+    h2 = Math.imul(h2 ^ s.charCodeAt(i), 0x85ebca6b);
+    h2 = Math.imul(h2 ^ (h2 >>> 13), 0xc2b2ae35);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+};
+
+export const verifyPinSync = (pin: string, hash: string): boolean => {
+  return hashPinSync(pin) === hash;
+};
+
+// ============================================================
+// PDF Report Generation (browser-based, no server)
+// ============================================================
+
+export const generateReportHTML = (
+  state: WealthOSState,
+  reportType: string,
+): string => {
+  const kpis = computeKPIs(state);
+  const fire = computeFIRE(state);
+  const sym = state.settings.currencySymbol;
+  const now = new Date().toLocaleString('en-IN');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${reportType} — WealthOS Infinity</title>
+<style>
+  @page { size: A4; margin: 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; line-height: 1.5; margin: 0; }
+  .header { background: linear-gradient(135deg, #1a1f2e, #2d1f0a); color: #d4af37; padding: 30px; border-radius: 8px; margin-bottom: 30px; }
+  .header h1 { margin: 0 0 6px 0; font-size: 28px; }
+  .header .subtitle { color: #888; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+  .header .meta { color: #fff; font-size: 11px; margin-top: 12px; }
+  h2 { color: #1a1f2e; border-bottom: 2px solid #d4af37; padding-bottom: 6px; font-size: 16px; margin-top: 28px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .metric { padding: 12px; border: 1px solid #e5e5e5; border-radius: 6px; }
+  .metric .label { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .metric .value { font-size: 18px; font-weight: 700; color: #1a1f2e; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
+  th { background: #1a1f2e; color: #fff; text-align: left; padding: 8px; font-weight: 600; }
+  td { padding: 8px; border-bottom: 1px solid #e5e5e5; }
+  tr:nth-child(even) td { background: #f8f8f8; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e5e5; color: #888; font-size: 10px; text-align: center; }
+  .score-box { display: inline-block; padding: 20px 30px; border: 3px solid #d4af37; border-radius: 50%; text-align: center; margin: 10px; }
+  .score-box .score { font-size: 36px; font-weight: 700; color: #1a1f2e; }
+  .score-box .label { font-size: 11px; color: #666; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="subtitle">WealthOS Infinity • Private Banking Report</div>
+    <h1>${reportType}</h1>
+    <div class="meta">
+      <strong>${state.settings.profileName}</strong> &nbsp;•&nbsp; Generated ${now} &nbsp;•&nbsp; Currency: ${state.settings.currency}
+    </div>
+  </div>
+
+  <h2>Executive Summary</h2>
+  <div class="grid">
+    <div class="metric"><div class="label">Net Worth</div><div class="value">${fmtFullCurrency(kpis.netWorth, sym)}</div></div>
+    <div class="metric"><div class="label">Total Assets</div><div class="value">${fmtFullCurrency(kpis.totalAssets, sym)}</div></div>
+    <div class="metric"><div class="label">Total Liabilities</div><div class="value">${fmtFullCurrency(kpis.totalLiabilities, sym)}</div></div>
+    <div class="metric"><div class="label">Monthly Surplus</div><div class="value">${fmtFullCurrency(kpis.monthlySurplus, sym)}</div></div>
+    <div class="metric"><div class="label">Savings Rate</div><div class="value">${kpis.savingsRate.toFixed(1)}%</div></div>
+    <div class="metric"><div class="label">Emergency Fund</div><div class="value">${kpis.emergencyFundMonths.toFixed(1)} months</div></div>
+    <div class="metric"><div class="label">Debt/Income Ratio</div><div class="value">${kpis.debtToIncomeRatio.toFixed(1)}%</div></div>
+    <div class="metric"><div class="label">FIRE Number</div><div class="value">${fmtFullCurrency(fire.fireNumber, sym)}</div></div>
+  </div>
+
+  <h2>Health Scores</h2>
+  <div style="text-align:center; margin: 20px 0;">
+    <div class="score-box"><div class="score">${kpis.wealthHealthScore}</div><div class="label">Wealth Health</div></div>
+    <div class="score-box"><div class="score">${kpis.financialHealthScore}</div><div class="label">Financial Health</div></div>
+    <div class="score-box"><div class="score">${fire.progressPct.toFixed(0)}%</div><div class="label">FIRE Progress</div></div>
+  </div>
+
+  <h2>Asset Allocation</h2>
+  <table>
+    <thead><tr><th>Category</th><th>Invested</th><th>Current Value</th><th>Gain</th><th>Return %</th><th>Allocation %</th></tr></thead>
+    <tbody>
+      ${computeAllocation(state.assets).map(a => `
+        <tr>
+          <td>${a.label}</td>
+          <td>${fmtFullCurrency(a.investedValue, sym)}</td>
+          <td>${fmtFullCurrency(a.value, sym)}</td>
+          <td style="color:${a.unrealizedGain >= 0 ? 'green' : 'red'}">${a.unrealizedGain >= 0 ? '+' : ''}${fmtFullCurrency(a.unrealizedGain, sym)}</td>
+          <td style="color:${a.gainPct >= 0 ? 'green' : 'red'}">${a.gainPct.toFixed(1)}%</td>
+          <td>${a.pct.toFixed(1)}%</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <h2>Active Liabilities</h2>
+  <table>
+    <thead><tr><th>Loan</th><th>Outstanding</th><th>EMI</th><th>Rate</th><th>Tenure Left</th></tr></thead>
+    <tbody>
+      ${state.liabilities.map(l => `
+        <tr>
+          <td>${l.name}</td>
+          <td>${fmtFullCurrency(l.outstandingBalance, sym)}</td>
+          <td>${fmtFullCurrency(l.emi, sym)}</td>
+          <td>${l.interestRate.toFixed(1)}%</td>
+          <td>${l.tenureMonthsRemaining} months</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <h2>Goals Tracking</h2>
+  <table>
+    <thead><tr><th>Goal</th><th>Target</th><th>Current</th><th>Progress</th><th>Monthly</th></tr></thead>
+    <tbody>
+      ${state.goals.map(g => {
+        const pct = (g.currentAmount / g.targetAmount) * 100;
+        return `<tr>
+          <td>${g.name}</td>
+          <td>${fmtFullCurrency(g.targetAmount, sym)}</td>
+          <td>${fmtFullCurrency(g.currentAmount, sym)}</td>
+          <td>${pct.toFixed(1)}%</td>
+          <td>${fmtFullCurrency(g.monthlyContribution, sym)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <strong>WealthOS Infinity</strong> • Personal CFO & Family Office Platform • Offline-First • AES-256 Encrypted<br/>
+    This report was generated locally on your device. No data was transmitted to any server.
+  </div>
+</body>
+</html>`;
+};
+
+export const downloadReport = (html: string, filename: string) => {
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+

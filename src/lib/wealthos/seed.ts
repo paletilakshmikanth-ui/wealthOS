@@ -155,5 +155,72 @@ export const createInitialState = (): WealthOSState => {
     ],
     netWorthHistory,
     activeView: 'dashboard',
+    estatePlan: {
+      documents: [
+        { id: nextId('ed'), type: 'will',                title: 'Last Will & Testament',       status: 'registered',  lastUpdated: '2024-03-15', nextReviewDate: '2027-03-15', notes: 'Registered with sub-registrar, Pune', attachmentsCount: 3 },
+        { id: nextId('ed'), type: 'nomination',          title: 'MF Nominations Update',       status: 'registered',  lastUpdated: '2024-08-01', nextReviewDate: '2026-08-01', notes: 'Updated nominees across all AMC folios', attachmentsCount: 1 },
+        { id: nextId('ed'), type: 'power_of_attorney',   title: 'General PoA — Spouse',        status: 'drafted',     lastUpdated: '2024-01-20', nextReviewDate: '2026-01-20', notes: 'Drafted, needs notarization', attachmentsCount: 1 },
+        { id: nextId('ed'), type: 'medical_directive',   title: 'Living Will / Advance Directive', status: 'not_started', lastUpdated: new Date().toISOString().slice(0, 10), notes: '', attachmentsCount: 0 },
+        { id: nextId('ed'), type: 'succession_plan',     title: 'Business Succession — Tech Startup', status: 'drafted', lastUpdated: '2024-06-10', nextReviewDate: '2025-12-31', notes: 'Co-founder buy-sell agreement drafted', attachmentsCount: 2 },
+      ],
+      beneficiaries: [
+        { id: nextId('b'), name: 'Diya Mehta',   relationship: 'Spouse',  sharePct: 50, assetIds: [], notes: 'Primary beneficiary' },
+        { id: nextId('b'), name: 'Vivaan Mehta', relationship: 'Son',     sharePct: 30, assetIds: [], notes: 'Minor — guardian appointed' },
+        { id: nextId('b'), name: 'Rajesh Mehta', relationship: 'Father',  sharePct: 10, assetIds: [], notes: 'Contingent' },
+        { id: nextId('b'), name: 'Meera Mehta',  relationship: 'Mother',  sharePct: 10, assetIds: [], notes: 'Contingent' },
+      ],
+      executorName: 'Adv. Sunil Deshpande',
+      guardianName: 'Diya Mehta',
+      trustSetup: false,
+      hasRegisteredWill: true,
+    },
+    childPlans: [
+      {
+        id: nextId('cp'),
+        childId: 'f-0003',
+        childName: 'Vivaan Mehta',
+        currentAge: 4,
+        milestones: [
+          { id: nextId('cm'), type: 'primary_education',   ageAtMilestone: 6,  targetAmount: 800000,    currentCorpus: 250000, monthlyContribution: 8000,  expectedReturnRate: 10 },
+          { id: nextId('cm'), type: 'secondary_education', ageAtMilestone: 16, targetAmount: 2500000,   currentCorpus: 350000, monthlyContribution: 12000, expectedReturnRate: 11 },
+          { id: nextId('cm'), type: 'higher_education',    ageAtMilestone: 18, targetAmount: 50000000,  currentCorpus: 2100000, monthlyContribution: 35000, expectedReturnRate: 12 },
+          { id: nextId('cm'), type: 'marriage',            ageAtMilestone: 28, targetAmount: 3000000,   currentCorpus: 0,      monthlyContribution: 5000,  expectedReturnRate: 10 },
+        ],
+      },
+    ],
+    elderCarePlans: [
+      {
+        id: nextId('ec'),
+        elderId: 'f-0004',
+        elderName: 'Rajesh Mehta',
+        age: 62,
+        monthlySupport: 25000,
+        annualMedicalCost: 180000,
+        insuranceCoverage: 500000,
+        needs: [
+          { id: nextId('en'), type: 'medical',         description: 'Annual health checkups + medication',     annualCost: 180000, inflationRate: 10, yearsNeeded: 20 },
+          { id: nextId('en'), type: 'monthly_support', description: 'Monthly living support',                  annualCost: 300000, inflationRate: 6,  yearsNeeded: 23 },
+          { id: nextId('en'), type: 'caregiver',       description: 'Full-time caregiver (post 75)',           annualCost: 360000, inflationRate: 8,  yearsNeeded: 10 },
+          { id: nextId('en'), type: 'emergency_fund',  description: 'Emergency medical reserve',               annualCost: 100000, inflationRate: 5,  yearsNeeded: 5  },
+        ],
+      },
+    ],
+    documents: [
+      { id: nextId('d'), name: 'ITR FY 2023-24',              category: 'tax',        issuer: 'Income Tax Dept',         documentDate: '2024-07-30', tags: ['ITR', 'FY24'],         encrypted: true,  sizeBytes: 482000,  notes: 'Acknowledgement 8841234', addedAt: '2024-07-31T10:00:00Z' },
+      { id: nextId('d'), name: 'HDFC Term Insurance Policy',  category: 'insurance',  issuer: 'HDFC Life',              documentDate: '2020-05-12', tags: ['term', 'life'],        encrypted: true,  sizeBytes: 1240000, notes: 'Policy #501234567',     addedAt: '2020-05-13T10:00:00Z' },
+      { id: nextId('d'), name: 'Star Health Family Floater',  category: 'insurance',  issuer: 'Star Health',            documentDate: '2024-04-01', expiryDate: '2025-03-31', tags: ['health', 'floater'], encrypted: true,  sizeBytes: 980000,  notes: 'Policy #SHF-2024-001',  addedAt: '2024-04-02T10:00:00Z' },
+      { id: nextId('d'), name: 'Home Loan Sanction Letter',   category: 'loan',       issuer: 'HDFC Ltd',               documentDate: '2019-06-10', tags: ['home', 'loan'],        encrypted: true,  sizeBytes: 650000,  notes: 'Loan #HL-2019-5567',    addedAt: '2019-06-15T10:00:00Z' },
+      { id: nextId('d'), name: 'Pune Apartment Sale Deed',    category: 'property',   issuer: 'Sub-Registrar Pune',     documentDate: '2019-06-20', tags: ['property', 'pune'],    encrypted: true,  sizeBytes: 2400000, notes: 'Reg #PUN-2019-112233',  addedAt: '2019-06-21T10:00:00Z' },
+      { id: nextId('d'), name: 'Parag Parikh Statement Q1',   category: 'investment', issuer: 'PPFAS MF',              documentDate: '2024-06-30', tags: ['mutual-fund', 'q1'],   encrypted: true,  sizeBytes: 320000,  notes: 'Folio 91234567',        addedAt: '2024-07-01T10:00:00Z' },
+      { id: nextId('d'), name: 'Last Will & Testament',       category: 'estate',     issuer: 'Self',                   documentDate: '2024-03-15', tags: ['will', 'registered'], encrypted: true,  sizeBytes: 850000,  notes: 'Reg with sub-registrar', addedAt: '2024-03-16T10:00:00Z' },
+      { id: nextId('d'), name: 'Aadhaar Card',                category: 'identity',   issuer: 'UIDAI',                  documentDate: '2018-01-01', tags: ['aadhaar'],             encrypted: true,  sizeBytes: 180000,  notes: '',                      addedAt: '2018-01-05T10:00:00Z' },
+      { id: nextId('d'), name: 'PAN Card',                    category: 'identity',   issuer: 'NSDL',                   documentDate: '2015-04-12', tags: ['pan'],                 encrypted: true,  sizeBytes: 150000,  notes: 'ABCDE1234F',            addedAt: '2015-04-15T10:00:00Z' },
+    ],
+    auth: {
+      pinHash: undefined,
+      biometricEnabled: true,
+      autoLockMinutes: 5,
+      hint: undefined,
+    },
   };
 };

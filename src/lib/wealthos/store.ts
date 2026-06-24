@@ -9,6 +9,11 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   Asset,
+  Beneficiary,
+  ChildPlan,
+  ElderCarePlan,
+  EstateDocument,
+  EstatePlan,
   ExpenseEntry,
   FamilyMember,
   Goal,
@@ -16,6 +21,7 @@ import type {
   InsurancePolicy,
   Liability,
   Settings,
+  VaultDocument,
   ViewId,
   WealthOSState,
 } from './types';
@@ -44,6 +50,31 @@ interface WealthOSActions {
   removeInsurance: (id: string) => void;
   addFamilyMember: (m: Omit<FamilyMember, 'id'>) => void;
   removeFamilyMember: (id: string) => void;
+  // Estate
+  addEstateDocument: (d: Omit<EstateDocument, 'id'>) => void;
+  updateEstateDocument: (id: string, partial: Partial<EstateDocument>) => void;
+  removeEstateDocument: (id: string) => void;
+  addBeneficiary: (b: Omit<Beneficiary, 'id'>) => void;
+  updateBeneficiary: (id: string, partial: Partial<Beneficiary>) => void;
+  removeBeneficiary: (id: string) => void;
+  updateEstatePlan: (partial: Partial<EstatePlan>) => void;
+  // Children
+  addChildPlan: (plan: Omit<ChildPlan, 'id'>) => void;
+  updateChildPlan: (id: string, partial: Partial<ChildPlan>) => void;
+  removeChildPlan: (id: string) => void;
+  // Elder Care
+  addElderCarePlan: (plan: Omit<ElderCarePlan, 'id'>) => void;
+  updateElderCarePlan: (id: string, partial: Partial<ElderCarePlan>) => void;
+  removeElderCarePlan: (id: string) => void;
+  // Documents
+  addDocument: (d: Omit<VaultDocument, 'id'>) => void;
+  updateDocument: (id: string, partial: Partial<VaultDocument>) => void;
+  removeDocument: (id: string) => void;
+  // Auth
+  setPin: (pinHash: string, hint?: string) => void;
+  removePin: () => void;
+  updateAuth: (partial: Partial<WealthOSState['auth']>) => void;
+  // System
   snapshotNetWorth: () => void;
   resetAll: () => void;
 }
@@ -136,14 +167,85 @@ export const useWealthOS = create<WealthOSStore>()(
           };
         }),
 
+      // ---------- Estate Planning ----------
+      addEstateDocument: (d) =>
+        set((s) => ({
+          estatePlan: { ...s.estatePlan, documents: [...s.estatePlan.documents, { ...d, id: uid() }] },
+        })),
+      updateEstateDocument: (id, partial) =>
+        set((s) => ({
+          estatePlan: {
+            ...s.estatePlan,
+            documents: s.estatePlan.documents.map(d => d.id === id ? { ...d, ...partial } : d),
+          },
+        })),
+      removeEstateDocument: (id) =>
+        set((s) => ({
+          estatePlan: { ...s.estatePlan, documents: s.estatePlan.documents.filter(d => d.id !== id) },
+        })),
+      addBeneficiary: (b) =>
+        set((s) => ({
+          estatePlan: { ...s.estatePlan, beneficiaries: [...s.estatePlan.beneficiaries, { ...b, id: uid() }] },
+        })),
+      updateBeneficiary: (id, partial) =>
+        set((s) => ({
+          estatePlan: {
+            ...s.estatePlan,
+            beneficiaries: s.estatePlan.beneficiaries.map(b => b.id === id ? { ...b, ...partial } : b),
+          },
+        })),
+      removeBeneficiary: (id) =>
+        set((s) => ({
+          estatePlan: { ...s.estatePlan, beneficiaries: s.estatePlan.beneficiaries.filter(b => b.id !== id) },
+        })),
+      updateEstatePlan: (partial) =>
+        set((s) => ({ estatePlan: { ...s.estatePlan, ...partial } })),
+
+      // ---------- Children ----------
+      addChildPlan: (plan) =>
+        set((s) => ({ childPlans: [...s.childPlans, { ...plan, id: uid() }] })),
+      updateChildPlan: (id, partial) =>
+        set((s) => ({
+          childPlans: s.childPlans.map(p => p.id === id ? { ...p, ...partial } : p),
+        })),
+      removeChildPlan: (id) =>
+        set((s) => ({ childPlans: s.childPlans.filter(p => p.id !== id) })),
+
+      // ---------- Elder Care ----------
+      addElderCarePlan: (plan) =>
+        set((s) => ({ elderCarePlans: [...s.elderCarePlans, { ...plan, id: uid() }] })),
+      updateElderCarePlan: (id, partial) =>
+        set((s) => ({
+          elderCarePlans: s.elderCarePlans.map(p => p.id === id ? { ...p, ...partial } : p),
+        })),
+      removeElderCarePlan: (id) =>
+        set((s) => ({ elderCarePlans: s.elderCarePlans.filter(p => p.id !== id) })),
+
+      // ---------- Documents ----------
+      addDocument: (d) =>
+        set((s) => ({ documents: [...s.documents, { ...d, id: uid() }] })),
+      updateDocument: (id, partial) =>
+        set((s) => ({
+          documents: s.documents.map(d => d.id === id ? { ...d, ...partial } : d),
+        })),
+      removeDocument: (id) =>
+        set((s) => ({ documents: s.documents.filter(d => d.id !== id) })),
+
+      // ---------- Auth ----------
+      setPin: (pinHash, hint) =>
+        set((s) => ({ auth: { ...s.auth, pinHash, hint } })),
+      removePin: () =>
+        set((s) => ({ auth: { ...s.auth, pinHash: undefined, hint: undefined } })),
+      updateAuth: (partial) =>
+        set((s) => ({ auth: { ...s.auth, ...partial } })),
+
       resetAll: () => set(() => ({ ...createInitialState() })),
     }),
     {
       name: 'wealthos-infinity-store',
       storage: createJSONStorage(() => localStorage),
-      version: 2,
+      version: 3,
       // Don't persist activeView — prevents SSR hydration mismatch
-      // (server always renders 'dashboard', client starts there too)
       partialize: (s) => ({
         settings: s.settings,
         assets: s.assets,
@@ -154,6 +256,11 @@ export const useWealthOS = create<WealthOSStore>()(
         insurance: s.insurance,
         family: s.family,
         netWorthHistory: s.netWorthHistory,
+        estatePlan: s.estatePlan,
+        childPlans: s.childPlans,
+        elderCarePlans: s.elderCarePlans,
+        documents: s.documents,
+        auth: s.auth,
       }),
       // Wipe any older persisted state
       migrate: () => createInitialState() as any,
