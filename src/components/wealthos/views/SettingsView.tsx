@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useWealthOS } from '@/lib/wealthos/store';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader } from '../Primitives';
-import { Settings as SettingsIcon, User, Globe, Percent, Calendar, Shield, Database, AlertTriangle, RotateCcw, Lock, Crown } from 'lucide-react';
+import { Settings as SettingsIcon, User, Globe, Percent, Calendar, Shield, Database, AlertTriangle, RotateCcw, Lock, Crown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,8 @@ import type { Settings } from '@/lib/wealthos/types';
 export function SettingsView() {
   const state = useWealthOS();
   const updateSettings = useWealthOS(s => s.updateSettings);
-  const resetAll = useWealthOS(s => s.resetAll);
+  const loadSampleData = useWealthOS(s => s.loadSampleData);
+  const clearAllData = useWealthOS(s => s.clearAllData);
   const snapshotNetWorth = useWealthOS(s => s.snapshotNetWorth);
 
   const update = (partial: Partial<Settings>) => {
@@ -173,19 +174,35 @@ export function SettingsView() {
       {/* Danger Zone */}
       <GlassCard glow="danger" className="p-5">
         <SectionHeader title="Danger Zone" subtitle="Irreversible actions" icon={<AlertTriangle className="w-4 h-4" />} />
-        <div className="flex items-center justify-between p-3 rounded-md bg-rose-500/5 border border-rose-500/15">
-          <div>
-            <p className="text-xs font-medium text-rose-400">Reset All Data</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Restore demo profile. This will erase all your current data.</p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between p-3 rounded-md bg-amber-500/5 border border-amber-500/15">
+            <div>
+              <p className="text-xs font-medium text-amber-400">Load Sample Data</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Replace current data with the demo profile (32-year-old tech professional). PIN preserved.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => {
+              if (confirm('Load sample data? This will REPLACE your current data with the demo profile. Your PIN will be preserved.')) {
+                loadSampleData();
+                toast.success('Sample data loaded', { description: 'Demo profile activated.' });
+              }
+            }} className="bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20">
+              <Database className="w-3.5 h-3.5 mr-1" /> Load Sample
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={() => {
-            if (confirm('Reset all data and restore demo profile? This cannot be undone.')) {
-              resetAll();
-              toast.success('All data reset to demo profile');
-            }
-          }} className="bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20">
-            <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset
-          </Button>
+          <div className="flex items-center justify-between p-3 rounded-md bg-rose-500/5 border border-rose-500/15">
+            <div>
+              <p className="text-xs font-medium text-rose-400">Clear All Data</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Wipe everything — assets, liabilities, income, expenses, goals, documents. PIN preserved.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => {
+              if (confirm('Clear ALL data? This wipes your entire profile. Your PIN will be preserved. This cannot be undone.')) {
+                clearAllData();
+                toast.success('All data cleared', { description: 'Your profile is now empty.' });
+              }
+            }} className="bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20">
+              <Trash2 className="w-3.5 h-3.5 mr-1" /> Clear All
+            </Button>
+          </div>
         </div>
       </GlassCard>
 

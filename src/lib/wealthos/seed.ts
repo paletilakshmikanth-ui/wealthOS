@@ -1,6 +1,9 @@
 // ============================================================
-// WealthOS Infinity — Seed Data
-// Realistic demo profile: 32-year-old tech professional in India
+// WealthOS Infinity — Seed Data & Empty State
+// New users start with an empty profile. They can either:
+//   1. Add their own data manually via the various modules
+//   2. Click "Load Sample Data" in the Command Center to
+//      populate the demo profile (32-year-old tech professional)
 // ============================================================
 
 import type { WealthOSState } from './types';
@@ -8,7 +11,68 @@ import type { WealthOSState } from './types';
 // Deterministic IDs (no Math.random) — prevents SSR hydration mismatch
 const id = (prefix: string, n: number) => `${prefix}-${n.toString(36).padStart(4, '0')}`;
 
-export const createInitialState = (): WealthOSState => {
+// ============================================================
+// EMPTY STATE — what new users see on first launch
+// ============================================================
+
+export const createEmptyState = (): WealthOSState => {
+  const now = new Date();
+  const isoNow = now.toISOString();
+  void isoNow;
+
+  return {
+    settings: {
+      country: 'India',
+      currency: 'INR',
+      currencySymbol: '₹',
+      timezone: 'Asia/Kolkata',
+      inflationRate: 6.2,
+      salaryGrowthRate: 8,
+      expectedMarketReturn: 12,
+      marketVolatility: 15,
+      safeWithdrawalRate: 4,
+      retirementAge: 55,
+      currentAge: 30,
+      lifeExpectancy: 85,
+      taxBracket: 30,
+      userMode: 'personal',
+      profileName: 'New User',
+    },
+    assets: [],
+    liabilities: [],
+    income: [],
+    expenses: [],
+    goals: [],
+    insurance: [],
+    family: [],
+    netWorthHistory: [],
+    activeView: 'dashboard',
+    estatePlan: {
+      documents: [],
+      beneficiaries: [],
+      executorName: undefined,
+      guardianName: undefined,
+      trustSetup: false,
+      hasRegisteredWill: false,
+    },
+    childPlans: [],
+    elderCarePlans: [],
+    documents: [],
+    auth: {
+      pinHash: undefined,
+      biometricEnabled: true,
+      autoLockMinutes: 5,
+      hint: undefined,
+    },
+  };
+};
+
+// ============================================================
+// SAMPLE DATA — loaded when user clicks "Load Sample Data"
+// Realistic profile: 32-year-old tech professional in India
+// ============================================================
+
+export const createSampleData = (): WealthOSState => {
   const now = new Date();
   const isoNow = now.toISOString();
 
@@ -113,25 +177,25 @@ export const createInitialState = (): WealthOSState => {
       { id: nextId('l'), name: 'Education Loan - SBI',  type: 'education_loan', outstandingBalance: 280000,  originalPrincipal: 500000,  interestRate: 10.5, emi: 7500,   tenureMonthsRemaining: 48,  startDate: '2018-08-01' },
     ],
     income: [
-      { id: nextId('i'), source: 'salary',    label: 'Primary Salary',         monthlyAmount: 280000, active: true  },
-      { id: nextId('i'), source: 'bonus',     label: 'Annual Bonus (avg)',     monthlyAmount: 25000,  active: true  },
-      { id: nextId('i'), source: 'freelance', label: 'Consulting',             monthlyAmount: 45000,  active: true  },
-      { id: nextId('i'), source: 'dividend',  label: 'Stock Dividends',        monthlyAmount: 8000,   active: true  },
-      { id: nextId('i'), source: 'rental',    label: 'Rental Income',          monthlyAmount: 22000,  active: true  },
-      { id: nextId('i'), source: 'interest',  label: 'FD & Savings Interest',  monthlyAmount: 5500,   active: true  },
+      { id: nextId('i'), source: 'salary',    label: 'Primary Salary',         amount: 280000, frequency: 'monthly', active: true  },
+      { id: nextId('i'), source: 'bonus',     label: 'Annual Bonus (avg)',     amount: 300000, frequency: 'yearly',  active: true  },
+      { id: nextId('i'), source: 'freelance', label: 'Consulting',             amount: 45000,  frequency: 'monthly', active: true  },
+      { id: nextId('i'), source: 'dividend',  label: 'Stock Dividends',        amount: 8000,   frequency: 'monthly', active: true  },
+      { id: nextId('i'), source: 'rental',    label: 'Rental Income',          amount: 22000,  frequency: 'monthly', active: true  },
+      { id: nextId('i'), source: 'interest',  label: 'FD & Savings Interest',  amount: 5500,   frequency: 'monthly', active: true  },
     ],
     expenses: [
-      { id: nextId('e'), category: 'housing',     label: 'Rent / Maintenance',  monthlyAmount: 18000, essential: true  },
-      { id: nextId('e'), category: 'food',        label: 'Groceries & Dining',  monthlyAmount: 28000, essential: true  },
-      { id: nextId('e'), category: 'transport',   label: 'Fuel & Cab',          monthlyAmount: 12000, essential: true  },
-      { id: nextId('e'), category: 'utilities',   label: 'Electricity/Water/Net', monthlyAmount: 6500, essential: true  },
-      { id: nextId('e'), category: 'healthcare',  label: 'Health & Wellness',   monthlyAmount: 8000,  essential: true  },
-      { id: nextId('e'), category: 'education',   label: 'Skill Development',   monthlyAmount: 10000, essential: false },
-      { id: nextId('e'), category: 'lifestyle',   label: 'Subscriptions',       monthlyAmount: 4500,  essential: false },
-      { id: nextId('e'), category: 'discretionary', label: 'Entertainment',     monthlyAmount: 15000, essential: false },
-      { id: nextId('e'), category: 'discretionary', label: 'Travel (avg)',      monthlyAmount: 25000, essential: false },
-      { id: nextId('e'), category: 'insurance',   label: 'Insurance Premiums',  monthlyAmount: 8500,  essential: true  },
-      { id: nextId('e'), category: 'other',       label: 'Miscellaneous',       monthlyAmount: 7000,  essential: false },
+      { id: nextId('e'), category: 'housing',     label: 'Rent / Maintenance',  amount: 18000, frequency: 'monthly', essential: true  },
+      { id: nextId('e'), category: 'food',        label: 'Groceries & Dining',  amount: 28000, frequency: 'monthly', essential: true  },
+      { id: nextId('e'), category: 'transport',   label: 'Fuel & Cab',          amount: 12000, frequency: 'monthly', essential: true  },
+      { id: nextId('e'), category: 'utilities',   label: 'Electricity/Water/Net', amount: 6500, frequency: 'monthly', essential: true  },
+      { id: nextId('e'), category: 'healthcare',  label: 'Health & Wellness',   amount: 8000,  frequency: 'monthly', essential: true  },
+      { id: nextId('e'), category: 'education',   label: 'Skill Development',   amount: 10000, frequency: 'monthly', essential: false },
+      { id: nextId('e'), category: 'lifestyle',   label: 'Newspaper & Magazines', amount: 800, frequency: 'monthly', essential: false },
+      { id: nextId('e'), category: 'discretionary', label: 'Entertainment',     amount: 15000, frequency: 'monthly', essential: false },
+      { id: nextId('e'), category: 'discretionary', label: 'Travel (avg)',      amount: 25000, frequency: 'monthly', essential: false },
+      { id: nextId('e'), category: 'insurance',   label: 'Insurance Premiums',  amount: 102000, frequency: 'yearly', essential: true  },
+      { id: nextId('e'), category: 'other',       label: 'Miscellaneous',       amount: 7000,  frequency: 'monthly', essential: false },
     ],
     goals: [
       { id: nextId('g'), name: 'Retirement Corpus',   type: 'retirement',       targetAmount: 120000000, currentAmount: 8800000, monthlyContribution: 85000, targetDate: '2048-12-31', expectedReturnRate: 12, priority: 'critical' },
@@ -224,3 +288,6 @@ export const createInitialState = (): WealthOSState => {
     },
   };
 };
+
+// Backward-compat alias — old code referenced createInitialState
+export const createInitialState = createSampleData;

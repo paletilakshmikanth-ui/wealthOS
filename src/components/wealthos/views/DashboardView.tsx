@@ -15,6 +15,7 @@ import {
   fmtDuration,
   ASSET_CATEGORY_META,
 } from '@/lib/wealthos/engine';
+import { EmptyDashboard } from './EmptyDashboard';
 import {
   GlassCard,
   MetricLabel,
@@ -58,12 +59,17 @@ import {
   Crown,
   Sparkles,
   AlertTriangle,
+  Database,
+  RotateCcw,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const axisStyle = { fontSize: 10, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' as const };
 
 export function DashboardView() {
   const state = useWealthOS();
+  const loadSampleData = useWealthOS(s => s.loadSampleData);
+  const clearAllData = useWealthOS(s => s.clearAllData);
   const kpis = computeKPIs(state);
   const allocation = computeAllocation(state.assets);
   const cashflow = computeCashFlow(state);
@@ -76,8 +82,46 @@ export function DashboardView() {
   const wealthRating = scoreRating(kpis.wealthHealthScore);
   const financialRating = scoreRating(kpis.financialHealthScore);
 
+  // Empty-state detection — if user has no assets AND no income AND no expenses,
+  // show the welcome / load-sample-data screen instead of empty KPI cards.
+  const isEmpty = state.assets.length === 0 &&
+                  state.income.length === 0 &&
+                  state.expenses.length === 0 &&
+                  state.liabilities.length === 0;
+  if (isEmpty) {
+    return <EmptyDashboard />;
+  }
+
   return (
     <div className="space-y-4">
+      {/* Top action toolbar — Load Sample Data / Clear (only shown when data exists) */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          onClick={() => {
+            if (confirm('Load sample data? This will REPLACE your current data with the demo profile (your PIN will be preserved).')) {
+              loadSampleData();
+              toast.success('Sample data loaded', { description: 'Demo profile: 32-year-old tech professional.' });
+            }
+          }}
+          className="px-3 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+          title="Replace current data with the demo profile"
+        >
+          <Database className="w-3 h-3" /> Load Sample Data
+        </button>
+        <button
+          onClick={() => {
+            if (confirm('Clear all data? This will wipe your assets, liabilities, income, expenses, goals, and documents. Your PIN will be preserved. This cannot be undone.')) {
+              clearAllData();
+              toast.success('All data cleared', { description: 'Your profile is now empty.' });
+            }
+          }}
+          className="px-3 py-1.5 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+          title="Wipe all data (PIN preserved)"
+        >
+          <RotateCcw className="w-3 h-3" /> Clear All Data
+        </button>
+      </div>
+
       {/* HERO — Command Strip */}
       <GlassCard glow="gold" className="p-5">
         <div className="flex flex-col lg:flex-row gap-6 items-stretch">

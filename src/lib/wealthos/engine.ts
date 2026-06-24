@@ -12,7 +12,9 @@ import type {
   ElderCarePlan,
   EstatePlan,
   FIRCEResult,
+  Frequency,
   Goal,
+  IncomeEntry,
   IncomeSource,
   Insight,
   KPIMetrics,
@@ -114,11 +116,75 @@ export const sumInvestedAssets = (assets: Asset[]): number =>
 export const sumLiabilities = (liabilities: Liability[]): number =>
   liabilities.reduce((s, l) => s + (l.outstandingBalance || 0), 0);
 
-export const sumMonthlyIncome = (income: WealthOSState['income']): number =>
-  income.filter(i => i.active).reduce((s, i) => s + (i.monthlyAmount || 0), 0);
+// ---------- Frequency Conversions ----------
+// Convert any recurring amount to its monthly equivalent.
+// Average days/month = 30.4375 (365.25 / 12, accounting for leap years)
+// Average weeks/month = 52/12 = 4.3333
+
+export const DAYS_PER_MONTH = 30.4375;
+export const WEEKS_PER_MONTH = 52 / 12;
+
+export const toMonthly = (
+  amount: number,
+  frequency: Frequency = 'monthly',
+  customDays?: number,
+): number => {
+  if (!amount || !isFinite(amount)) return 0;
+  switch (frequency) {
+    case 'daily':   return amount * DAYS_PER_MONTH;
+    case 'weekly':  return amount * WEEKS_PER_MONTH;
+    case 'monthly': return amount;
+    case 'yearly':  return amount / 12;
+    case 'custom':  return amount * (DAYS_PER_MONTH / Math.max(1, customDays || 30));
+    default:        return amount;
+  }
+};
+
+export const toYearly = (
+  amount: number,
+  frequency: Frequency = 'monthly',
+  customDays?: number,
+): number => toMonthly(amount, frequency, customDays) * 12;
+
+export const toDaily = (
+  amount: number,
+  frequency: Frequency = 'monthly',
+  customDays?: number,
+): number => toMonthly(amount, frequency, customDays) / DAYS_PER_MONTH;
+
+export const FREQUENCY_META: Record<Frequency, { label: string; short: string; description: string }> = {
+  daily:   { label: 'Daily',           short: '/day',   description: 'Occurs every day' },
+  weekly:  { label: 'Weekly',          short: '/wk',    description: 'Occurs every week' },
+  monthly: { label: 'Monthly',         short: '/mo',    description: 'Occurs every month' },
+  yearly:  { label: 'Yearly',          short: '/yr',    description: 'Occurs once a year' },
+  custom:  { label: 'Custom Interval', short: '/cust',  description: 'Custom interval in days' },
+};
+
+export const frequencyLabel = (f: Frequency, customDays?: number): string => {
+  if (f === 'custom') return `every ${customDays || 30} days`;
+  return FREQUENCY_META[f].label.toLowerCase();
+};
+
+export const frequencyShort = (f: Frequency, customDays?: number): string => {
+  if (f === 'custom') return `/ ${customDays || 30}d`;
+  return FREQUENCY_META[f].short;
+};
+
+// Format an entry's amount with its frequency, e.g. "₹50,000 /mo" or "₹500 /day"
+export const fmtEntryAmount = (
+  amount: number,
+  frequency: Frequency = 'monthly',
+  customDays?: number,
+  symbol = '₹',
+): string => {
+  return `${fmtFullCurrency(amount, symbol)} ${frequencyShort(frequency, customDays)}`;
+};
+
+export const sumMonthlyIncome = (income: IncomeEntry[]): number =>
+  income.filter(i => i.active).reduce((s, i) => s + toMonthly(i.amount, i.frequency, i.customDays), 0);
 
 export const sumMonthlyExpenses = (expenses: WealthOSState['expenses']): number =>
-  expenses.reduce((s, e) => s + (e.monthlyAmount || 0), 0);
+  expenses.reduce((s, e) => s + toMonthly(e.amount, e.frequency, e.customDays), 0);
 
 export const sumMonthlyEMI = (liabilities: Liability[]): number =>
   liabilities.reduce((s, l) => s + (l.emi || 0), 0);
@@ -168,21 +234,27 @@ export const computeCashFlow = (state: WealthOSState): CashFlowBreakdown => {
   return {
     income: state.income
       .filter(i => i.active)
-      .map(i => ({
-        source: i.source,
-        label: i.label || INCOME_SOURCE_META[i.source].label,
-        amount: i.monthlyAmount,
-        pct: (i.monthlyAmount / totalIncome) * 100,
-      }))
+      .map(i => {
+        const monthly = toMonthly(i.amount, i.frequency, i.customDays);
+        return {
+          source: i.source,
+          label: i.label || INCOME_SOURCE_META[i.source].label,
+          amount: monthly,
+          pct: (monthly / totalIncome) * 100,
+        };
+      })
       .sort((a, b) => b.amount - a.amount),
     expenses: state.expenses
-      .map(e => ({
-        category: e.category,
-        label: e.label,
-        amount: e.monthlyAmount,
-        pct: (e.monthlyAmount / totalExpenses) * 100,
-        essential: e.essential,
-      }))
+      .map(e => {
+        const monthly = toMonthly(e.amount, e.frequency, e.customDays);
+        return {
+          category: e.category,
+          label: e.label,
+          amount: monthly,
+          pct: (monthly / totalExpenses) * 100,
+          essential: e.essential,
+        };
+      })
       .sort((a, b) => b.amount - a.amount),
     surplus: sumMonthlyIncome(state.income) - sumMonthlyExpenses(state.expenses),
   };
@@ -193,7 +265,7 @@ export const computeCashFlow = (state: WealthOSState): CashFlowBreakdown => {
 export const computePassiveIncomeMonthly = (state: WealthOSState): number =>
   state.income
     .filter(i => i.active && INCOME_SOURCE_META[i.source].isPassive)
-    .reduce((s, i) => s + i.monthlyAmount, 0) +
+    .reduce((s, i) => s + toMonthly(i.amount, i.frequency, i.customDays), 0) +
   // imputed returns from investments
   state.assets
     .filter(a => ASSET_CATEGORY_META[a.category].isInvestment)

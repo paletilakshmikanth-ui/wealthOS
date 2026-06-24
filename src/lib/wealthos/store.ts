@@ -25,7 +25,7 @@ import type {
   ViewId,
   WealthOSState,
 } from './types';
-import { createInitialState } from './seed';
+import { createInitialState, createEmptyState, createSampleData } from './seed';
 import { uid } from './engine';
 
 interface WealthOSActions {
@@ -76,12 +76,16 @@ interface WealthOSActions {
   updateAuth: (partial: Partial<WealthOSState['auth']>) => void;
   // System
   snapshotNetWorth: () => void;
+  loadSampleData: () => void;
+  clearAllData: () => void;
   resetAll: () => void;
 }
 
 type WealthOSStore = WealthOSState & WealthOSActions;
 
-const seed = createInitialState();
+// New users start with an empty profile. They can load sample data
+// on demand via the "Load Sample Data" button in the Command Center.
+const seed = createEmptyState();
 
 export const useWealthOS = create<WealthOSStore>()(
   persist(
@@ -239,12 +243,29 @@ export const useWealthOS = create<WealthOSStore>()(
       updateAuth: (partial) =>
         set((s) => ({ auth: { ...s.auth, ...partial } })),
 
-      resetAll: () => set(() => ({ ...createInitialState() })),
+      // ---------- System ----------
+      loadSampleData: () =>
+        set(() => {
+          // Preserve the user's auth/PIN across the data load
+          const current = useWealthOS.getState();
+          const sample = createSampleData();
+          return { ...sample, auth: current.auth, activeView: 'dashboard' };
+        }),
+
+      clearAllData: () =>
+        set(() => {
+          // Wipe everything but keep auth/PIN
+          const current = useWealthOS.getState();
+          const empty = createEmptyState();
+          return { ...empty, auth: current.auth, activeView: 'dashboard' };
+        }),
+
+      resetAll: () => set(() => ({ ...createSampleData() })),
     }),
     {
       name: 'wealthos-infinity-store',
       storage: createJSONStorage(() => localStorage),
-      version: 3,
+      version: 4,
       // Don't persist activeView — prevents SSR hydration mismatch
       partialize: (s) => ({
         settings: s.settings,
@@ -262,8 +283,36 @@ export const useWealthOS = create<WealthOSStore>()(
         documents: s.documents,
         auth: s.auth,
       }),
-      // Wipe any older persisted state
-      migrate: () => createInitialState() as any,
+      // Migrate older persisted states:
+      //  - v3 → v4: income/expense entries used `monthlyAmount`; now they use `amount` + `frequency`
+      //  - older: just start fresh with empty state (preserves auth via partialize merge)
+      migrate: (persistedState: any, version: number) => {
+        if (!persistedState) return createEmptyState() as any;
+        if (version < 4) {
+          // Convert legacy monthlyAmount → amount + frequency='monthly'
+          const migrated = { ...persistedState };
+          if (Array.isArray(migrated.income)) {
+            migrated.income = migrated.income.map((i: any) => ({
+              ...i,
+              amount: i.amount ?? i.monthlyAmount ?? 0,
+              frequency: i.frequency ?? 'monthly',
+              customDays: i.customDays,
+              monthlyAmount: undefined,
+            }));
+          }
+          if (Array.isArray(migrated.expenses)) {
+            migrated.expenses = migrated.expenses.map((e: any) => ({
+              ...e,
+              amount: e.amount ?? e.monthlyAmount ?? 0,
+              frequency: e.frequency ?? 'monthly',
+              customDays: e.customDays,
+              monthlyAmount: undefined,
+            }));
+          }
+          return migrated as any;
+        }
+        return persistedState as any;
+      },
     }
   )
 );

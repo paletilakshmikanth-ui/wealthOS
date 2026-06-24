@@ -1,10 +1,20 @@
 'use client';
 
 import { useWealthOS } from '@/lib/wealthos/store';
-import { computeCashFlow, computeKPIs, fmtCurrency, fmtPct, INCOME_SOURCE_META } from '@/lib/wealthos/engine';
+import {
+  computeCashFlow,
+  computeKPIs,
+  fmtCurrency,
+  fmtFullCurrency,
+  fmtPct,
+  INCOME_SOURCE_META,
+  FREQUENCY_META,
+  frequencyShort,
+  toMonthly,
+} from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar, DeltaPill } from '../Primitives';
 import { ResponsiveContainer, Sankey, Tooltip, BarChart, Bar, XAxis, YAxis, Cell, PieChart, Pie } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Plus, Trash2, Activity, Wallet } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Plus, Trash2, Activity, Wallet, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { useState } from 'react';
-import type { IncomeEntry, IncomeSource, ExpenseEntry, ExpenseCategory } from '@/lib/wealthos/types';
+import type { IncomeEntry, IncomeSource, ExpenseEntry, ExpenseCategory, Frequency } from '@/lib/wealthos/types';
 
 const axisStyle = { fontSize: 10, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' as const };
 
@@ -59,27 +69,39 @@ export function CashFlowView() {
         <GlassCard className="p-5">
           <SectionHeader title="Income Sources" subtitle="All active income streams" icon={<ArrowUpRight className="w-4 h-4" />} action={<AddIncomeDialog />} />
           <div className="space-y-2">
-            {cf.income.map(i => {
+            {state.income.filter(i => i.active).map(i => {
               const meta = INCOME_SOURCE_META[i.source];
+              const monthly = toMonthly(i.amount, i.frequency, i.customDays);
               return (
-                <div key={i.label + i.source} className="flex items-center gap-3 p-2 rounded-md bg-white/[0.02] border border-white/5">
+                <div key={i.id} className="flex items-center gap-3 p-2 rounded-md bg-white/[0.02] border border-white/5">
                   <div className={`w-1.5 h-8 rounded-full ${meta.isPassive ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-foreground">{i.label}</span>
-                      <span className="font-mono font-semibold text-emerald-400">{fmtCurrency(i.amount, sym)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-foreground truncate">{i.label}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="font-mono font-semibold text-emerald-400">{fmtCurrency(monthly, sym)}</span>
+                        <span className="text-[9px] text-muted-foreground font-mono">/mo</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] text-muted-foreground">{meta.label} {meta.isPassive && '• Passive'}</span>
-                      <span className="text-[10px] text-muted-foreground">{i.pct.toFixed(1)}%</span>
+                    <div className="flex items-center justify-between mt-1 gap-2">
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {meta.label}{meta.isPassive && ' • Passive'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono shrink-0 flex items-center gap-1">
+                        <Repeat className="w-2.5 h-2.5" />
+                        {fmtFullCurrency(i.amount, sym)} {frequencyShort(i.frequency, i.customDays)}
+                      </span>
                     </div>
                   </div>
-                  <button onClick={() => useWealthOS.getState().removeIncome(state.income.find(x => x.label === i.label && x.source === i.source)?.id || '')} className="text-muted-foreground hover:text-rose-400 p-1">
+                  <button onClick={() => useWealthOS.getState().removeIncome(i.id)} className="text-muted-foreground hover:text-rose-400 p-1 shrink-0">
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
               );
             })}
+            {state.income.filter(i => i.active).length === 0 && (
+              <div className="text-center py-6 text-xs text-muted-foreground">No income sources yet. Click "Add" to create one.</div>
+            )}
           </div>
         </GlassCard>
 
@@ -91,24 +113,30 @@ export function CashFlowView() {
                 <Pie data={cf.expenses} dataKey="amount" nameKey="label" cx="50%" cy="50%" innerRadius={35} outerRadius={70} paddingAngle={1}>
                   {cf.expenses.map((e, i) => <Cell key={i} fill={e.essential ? '#34d399' : '#fbbf24'} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: 'rgba(20,20,28,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }} formatter={(v: any) => fmtCurrency(v as number, sym)} />
+                <Tooltip contentStyle={{ background: 'rgba(20,20,28,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }} formatter={(v: any) => fmtCurrency(v as number, sym) + ' /mo'} />
               </PieChart>
             </ResponsiveContainer>
             <div className="space-y-1.5 overflow-y-auto max-h-44 scroll-thin">
-              {cf.expenses.map(e => (
-                <div key={e.label} className="flex items-center justify-between text-[11px]">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${e.essential ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                    <span className="text-muted-foreground">{e.label}</span>
+              {state.expenses.map(e => {
+                const monthly = toMonthly(e.amount, e.frequency, e.customDays);
+                return (
+                  <div key={e.id} className="flex items-center justify-between text-[11px] gap-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${e.essential ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                      <span className="text-muted-foreground truncate">{e.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono text-foreground">{fmtCurrency(monthly, sym)}<span className="text-[9px] text-muted-foreground">/mo</span></span>
+                      <button onClick={() => useWealthOS.getState().removeExpense(e.id)} className="text-muted-foreground hover:text-rose-400">
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-foreground">{fmtCurrency(e.amount, sym)}</span>
-                    <button onClick={() => useWealthOS.getState().removeExpense(state.expenses.find(x => x.label === e.label)?.id || '')} className="text-muted-foreground hover:text-rose-400">
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+              {state.expenses.length === 0 && (
+                <div className="text-center py-6 text-xs text-muted-foreground">No expenses yet.</div>
+              )}
             </div>
           </div>
         </GlassCard>
@@ -146,13 +174,34 @@ function AddIncomeDialog() {
   const addIncome = useWealthOS(s => s.addIncome);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ source: 'salary' as IncomeSource, label: '', monthlyAmount: '' });
+  const [form, setForm] = useState({
+    source: 'salary' as IncomeSource,
+    label: '',
+    amount: '',
+    frequency: 'monthly' as Frequency,
+    customDays: '15',
+  });
+
+  const monthlyPreview = toMonthly(
+    parseFloat(form.amount) || 0,
+    form.frequency,
+    form.frequency === 'custom' ? parseInt(form.customDays) || 30 : undefined,
+  );
+
   const submit = () => {
-    if (!form.label || !form.monthlyAmount) return;
-    addIncome({ source: form.source, label: form.label, monthlyAmount: parseFloat(form.monthlyAmount) || 0, active: true });
-    setForm({ source: 'salary', label: '', monthlyAmount: '' });
+    if (!form.label || !form.amount) return;
+    addIncome({
+      source: form.source,
+      label: form.label,
+      amount: parseFloat(form.amount) || 0,
+      frequency: form.frequency,
+      customDays: form.frequency === 'custom' ? parseInt(form.customDays) || 30 : undefined,
+      active: true,
+    });
+    setForm({ source: 'salary', label: '', amount: '', frequency: 'monthly', customDays: '15' });
     setOpen(false);
   };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button size="sm" className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button></DialogTrigger>
@@ -172,10 +221,37 @@ function AddIncomeDialog() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Monthly Amount ({sym})</Label>
-            <Input type="number" value={form.monthlyAmount} onChange={e => setForm({ ...form, monthlyAmount: e.target.value })} className="bg-black/30 border-white/10 font-mono" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Amount ({sym})</Label>
+              <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="e.g., 50000" className="bg-black/30 border-white/10 font-mono" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Frequency</Label>
+              <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v as Frequency })}>
+                <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
+                <SelectContent className="glass-strong border-white/10">
+                  {Object.entries(FREQUENCY_META).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+          {form.frequency === 'custom' && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Interval (days)</Label>
+              <Input type="number" value={form.customDays} onChange={e => setForm({ ...form, customDays: e.target.value })} placeholder="e.g., 15" className="bg-black/30 border-white/10 font-mono" />
+              <p className="text-[10px] text-muted-foreground mt-1">Amount occurs every N days</p>
+            </div>
+          )}
+          {form.amount && (
+            <div className="p-2 rounded-md bg-emerald-500/5 border border-emerald-500/15">
+              <p className="text-[11px] text-emerald-300/90">
+                <Repeat className="w-3 h-3 inline mr-1" />
+                Monthly equivalent: <span className="font-mono font-bold">{fmtFullCurrency(monthlyPreview, sym)}/mo</span>
+                <span className="text-muted-foreground"> · Yearly: {fmtFullCurrency(monthlyPreview * 12, sym)}/yr</span>
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
@@ -190,13 +266,35 @@ function AddExpenseDialog() {
   const addExpense = useWealthOS(s => s.addExpense);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ category: 'food' as ExpenseCategory, label: '', monthlyAmount: '', essential: true });
+  const [form, setForm] = useState({
+    category: 'food' as ExpenseCategory,
+    label: '',
+    amount: '',
+    frequency: 'monthly' as Frequency,
+    customDays: '15',
+    essential: true,
+  });
+
+  const monthlyPreview = toMonthly(
+    parseFloat(form.amount) || 0,
+    form.frequency,
+    form.frequency === 'custom' ? parseInt(form.customDays) || 30 : undefined,
+  );
+
   const submit = () => {
-    if (!form.label || !form.monthlyAmount) return;
-    addExpense({ category: form.category, label: form.label, monthlyAmount: parseFloat(form.monthlyAmount) || 0, essential: form.essential });
-    setForm({ category: 'food', label: '', monthlyAmount: '', essential: true });
+    if (!form.label || !form.amount) return;
+    addExpense({
+      category: form.category,
+      label: form.label,
+      amount: parseFloat(form.amount) || 0,
+      frequency: form.frequency,
+      customDays: form.frequency === 'custom' ? parseInt(form.customDays) || 30 : undefined,
+      essential: form.essential,
+    });
+    setForm({ category: 'food', label: '', amount: '', frequency: 'monthly', customDays: '15', essential: true });
     setOpen(false);
   };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button size="sm" className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button></DialogTrigger>
@@ -216,10 +314,37 @@ function AddExpenseDialog() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Monthly Amount ({sym})</Label>
-            <Input type="number" value={form.monthlyAmount} onChange={e => setForm({ ...form, monthlyAmount: e.target.value })} className="bg-black/30 border-white/10 font-mono" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Amount ({sym})</Label>
+              <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="e.g., 5000" className="bg-black/30 border-white/10 font-mono" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Frequency</Label>
+              <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v as Frequency })}>
+                <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
+                <SelectContent className="glass-strong border-white/10">
+                  {Object.entries(FREQUENCY_META).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+          {form.frequency === 'custom' && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Interval (days)</Label>
+              <Input type="number" value={form.customDays} onChange={e => setForm({ ...form, customDays: e.target.value })} placeholder="e.g., 15" className="bg-black/30 border-white/10 font-mono" />
+              <p className="text-[10px] text-muted-foreground mt-1">Amount occurs every N days</p>
+            </div>
+          )}
+          {form.amount && (
+            <div className="p-2 rounded-md bg-rose-500/5 border border-rose-500/15">
+              <p className="text-[11px] text-rose-300/90">
+                <Repeat className="w-3 h-3 inline mr-1" />
+                Monthly equivalent: <span className="font-mono font-bold">{fmtFullCurrency(monthlyPreview, sym)}/mo</span>
+                <span className="text-muted-foreground"> · Yearly: {fmtFullCurrency(monthlyPreview * 12, sym)}/yr</span>
+              </p>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">Essential (non-discretionary)</Label>
             <Switch checked={form.essential} onCheckedChange={(v) => setForm({ ...form, essential: v })} />

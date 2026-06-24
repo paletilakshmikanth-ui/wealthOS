@@ -81,6 +81,10 @@ export type ExpenseCategory =
   | 'taxes'
   | 'other';
 
+// Recurring frequency for income & expense entries.
+// The engine converts any frequency to a monthly equivalent for calculations.
+export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+
 export type GoalType =
   | 'retirement'
   | 'house'
@@ -130,7 +134,9 @@ export interface IncomeEntry {
   id: string;
   source: IncomeSource;
   label: string;
-  monthlyAmount: number;
+  amount: number;            // amount per occurrence (per the frequency)
+  frequency: Frequency;      // how often this amount occurs
+  customDays?: number;       // when frequency === 'custom', interval in days
   active: boolean;
 }
 
@@ -138,7 +144,9 @@ export interface ExpenseEntry {
   id: string;
   category: ExpenseCategory;
   label: string;
-  monthlyAmount: number;
+  amount: number;            // amount per occurrence (per the frequency)
+  frequency: Frequency;      // how often this amount occurs
+  customDays?: number;       // when frequency === 'custom', interval in days
   essential: boolean;
 }
 

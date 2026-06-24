@@ -5,6 +5,8 @@ import { useWealthOS } from '@/lib/wealthos/store';
 import {
   runMonteCarlo,
   computeNetWorth,
+  sumMonthlyIncome,
+  sumMonthlyExpenses,
   fmtCurrency,
   fmtPct,
 } from '@/lib/wealthos/engine';
@@ -21,7 +23,7 @@ export function SimulationView() {
   const state = useWealthOS();
   const sym = state.settings.currencySymbol;
 
-  const [monthlyContribution, setMonthlyContribution] = useState(state.income.filter(i => i.active).reduce((s,i)=>s+i.monthlyAmount,0) - state.expenses.reduce((s,e)=>s+e.monthlyAmount,0));
+  const [monthlyContribution, setMonthlyContribution] = useState(sumMonthlyIncome(state.income) - sumMonthlyExpenses(state.expenses));
   const [years, setYears] = useState(state.settings.retirementAge - state.settings.currentAge);
   const [targetCorpus, setTargetCorpus] = useState(computeNetWorth(state) * 5);
   const [numSims, setNumSims] = useState(300);
