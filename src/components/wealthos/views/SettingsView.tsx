@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useWealthOS } from '@/lib/wealthos/store';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader } from '../Primitives';
-import { Settings as SettingsIcon, User, Globe, Percent, Calendar, Shield, Database, AlertTriangle, RotateCcw, Lock, Crown, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, User, Globe, Percent, Calendar, Shield, Database, AlertTriangle, RotateCcw, Lock, Crown, Trash2, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,8 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import type { Settings } from '@/lib/wealthos/types';
+import { BackupDialog } from '../BackupDialog';
+import { RestoreDialog } from '../RestoreDialog';
 
 export function SettingsView() {
   const state = useWealthOS();
@@ -164,9 +166,16 @@ export function SettingsView() {
             <Button variant="outline" size="sm" onClick={() => { snapshotNetWorth(); toast.success('Net worth snapshot captured'); }} className="w-full bg-black/30 border-white/10">
               <Calendar className="w-3.5 h-3.5 mr-2" /> Capture Net Worth Snapshot
             </Button>
-            <Button variant="outline" size="sm" onClick={() => toast.success('Encrypted backup exported', { description: 'Backup file saved to download folder.' })} className="w-full bg-black/30 border-white/10">
-              <Lock className="w-3.5 h-3.5 mr-2" /> Export Encrypted Backup
-            </Button>
+            <BackupDialog trigger={
+              <Button variant="outline" size="sm" className="w-full bg-black/30 border-white/10 hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-400">
+                <Download className="w-3.5 h-3.5 mr-2" /> Export Encrypted Backup
+              </Button>
+            } />
+            <RestoreDialog trigger={
+              <Button variant="outline" size="sm" className="w-full bg-black/30 border-white/10 hover:bg-sky-500/10 hover:border-sky-500/30 hover:text-sky-400">
+                <Upload className="w-3.5 h-3.5 mr-2" /> Restore from Backup
+              </Button>
+            } />
           </div>
         </GlassCard>
       </div>

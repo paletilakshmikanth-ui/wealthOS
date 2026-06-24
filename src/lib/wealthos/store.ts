@@ -85,6 +85,7 @@ interface WealthOSActions {
   snapshotNetWorth: () => void;
   loadSampleData: () => void;
   clearAllData: () => void;
+  restoreFromBackup: (data: Partial<WealthOSState>) => void;
   resetAll: () => void;
 }
 
@@ -281,6 +282,18 @@ export const useWealthOS = create<WealthOSStore>()(
           const current = useWealthOS.getState();
           const empty = createEmptyState();
           return { ...empty, auth: current.auth, activeView: 'dashboard' };
+        }),
+
+      restoreFromBackup: (data) =>
+        set(() => {
+          // Replace all data slices with the backup contents.
+          // Preserve the current auth (PIN) — the backup file never contains it.
+          const current = useWealthOS.getState();
+          return {
+            ...data,
+            auth: current.auth,
+            activeView: 'dashboard',
+          } as any;
         }),
 
       resetAll: () => set(() => ({ ...createSampleData() })),

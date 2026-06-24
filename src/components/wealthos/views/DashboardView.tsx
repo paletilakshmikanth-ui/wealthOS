@@ -61,8 +61,12 @@ import {
   AlertTriangle,
   Database,
   RotateCcw,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BackupDialog } from '../BackupDialog';
+import { RestoreDialog } from '../RestoreDialog';
 
 const axisStyle = { fontSize: 10, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' as const };
 
@@ -94,8 +98,24 @@ export function DashboardView() {
 
   return (
     <div className="space-y-4">
-      {/* Top action toolbar — Load Sample Data / Clear (only shown when data exists) */}
+      {/* Top action toolbar — Load Sample Data / Backup / Restore / Clear (only shown when data exists) */}
       <div className="flex flex-wrap items-center justify-end gap-2">
+        <BackupDialog trigger={
+          <button
+            className="px-3 py-1.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+            title="Download an encrypted backup of all your data (AES-256, requires PIN)"
+          >
+            <Download className="w-3 h-3" /> Backup
+          </button>
+        } />
+        <RestoreDialog trigger={
+          <button
+            className="px-3 py-1.5 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+            title="Restore data from an encrypted backup file (requires PIN)"
+          >
+            <Upload className="w-3 h-3" /> Restore
+          </button>
+        } />
         <button
           onClick={() => {
             if (confirm('Load sample data? This will REPLACE your current data with the demo profile (your PIN will be preserved).')) {
