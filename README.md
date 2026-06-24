@@ -14,6 +14,7 @@ A production-grade, offline-first, AES-256 encrypted wealth management platform 
 
 - [✨ Key Features](#-key-features)
 - [🎯 Quick Start](#-quick-start)
+- [🚀 How to Run (Dev & Production)](#-how-to-run-dev--production)
 - [🏗️ Architecture](#-architecture)
 - [🧠 Financial Calculation Engine](#-financial-calculation-engine)
 - [🔐 Security Model](#-security-model)
@@ -90,6 +91,76 @@ bun run start
 | `bun run start` | Start production server |
 | `bun run lint` | Run ESLint |
 | `bun run db:push` | Push Prisma schema to database (unused in offline mode) |
+
+---
+
+## 🚀 How to Run (Dev & Production)
+
+### Development Mode
+
+**3 commands to get started:**
+
+```bash
+# 1. Install dependencies
+bun install   # or: npm install
+
+# 2. Start the dev server (with hot reload)
+bun run dev   # or: npm run dev
+
+# 3. Open http://localhost:3000
+```
+
+The dev server features:
+- ⚡ **Hot Module Replacement (HMR)** — instant updates on code changes
+- 🔍 **TypeScript checking** — real-time type errors
+- 🐛 **Error overlay** — friendly error messages with stack traces
+- 📝 **Dev log** — written to `dev.log` for debugging
+
+### Production Mode
+
+**5 commands to build and serve:**
+
+```bash
+# 1. Install dependencies (if not already done)
+bun install
+
+# 2. Build the production bundle
+bun run build
+
+# 3. Start the production server
+bun run start
+
+# 4. Open http://localhost:3000
+```
+
+The production server:
+- 🚀 Runs on **port 3000** (configurable via `PORT` env var)
+- 📦 Uses the standalone build (`.next/standalone/server.js`)
+- ⚡ Optimized for performance (minified, tree-shaken)
+- 📝 Logs to `server.log`
+
+### Custom Port
+
+```bash
+# Dev on port 8080
+PORT=8080 bun run dev
+
+# Production on port 80
+PORT=80 bun run start
+```
+
+### Deployment Options
+
+WealthOS Infinity can be deployed to multiple platforms. See **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** for detailed step-by-step instructions:
+
+| Platform | Difficulty | Time | Best For |
+|----------|-----------|------|----------|
+| **Vercel** | ![Easy](https://img.shields.io/badge/Easy-green) | 2 min | Quick deploy, free tier, automatic HTTPS |
+| **Docker** | ![Medium](https://img.shields.io/badge/Medium-yellow) | 5 min | Self-hosting, consistent environments |
+| **VPS (PM2 + Nginx)** | ![Medium](https://img.shields.io/badge/Medium-yellow) | 10 min | Full control, custom domain, SSL |
+| **Static Export** | ![Advanced](https://img.shields.io/badge/Advanced-red) | 3 min | GitHub Pages, Netlify (limited) |
+
+**👉 For complete step-by-step deployment instructions, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**
 
 ---
 
@@ -445,6 +516,7 @@ my-project/
 | Document | Description |
 |----------|-------------|
 | [README.md](./README.md) | This file — overview, quick start, features |
+| [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | **Step-by-step dev + production deployment guide** (Vercel, Docker, VPS, static) |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical deep-dive: engine, store, crypto, data flow |
 | [CHANGELOG.md](./CHANGELOG.md) | Version history (v1.0 → v2.3) |
 | [docs/SECURITY.md](./docs/SECURITY.md) | Security model, threat analysis, crypto details |
