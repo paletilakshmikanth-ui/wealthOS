@@ -11,7 +11,7 @@ import {
 } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar, DeltaPill } from '../Primitives';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, LineChart, Line, CartesianGrid, Legend } from 'recharts';
-import { CreditCard, TrendingDown, AlertTriangle, Plus, Trash2, Flame, Snowflake, Calculator } from 'lucide-react';
+import { CreditCard, TrendingDown, AlertTriangle, Plus, Trash2, Flame, Snowflake, Calculator, PencilLine, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog';
+import { CSVImportDialog } from '../CSVImportDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Liability, LiabilityType } from '@/lib/wealthos/types';
 
@@ -83,7 +84,7 @@ export function LiabilitiesView() {
       {/* Debt breakdown + strategy comparison */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <GlassCard className="p-5 xl:col-span-2">
-          <SectionHeader title="Debt Portfolio" subtitle="All outstanding liabilities" icon={<CreditCard className="w-4 h-4" />} action={<AddLiabilityDialog />} />
+          <SectionHeader title="Debt Portfolio" subtitle="All outstanding liabilities" icon={<CreditCard className="w-4 h-4" />} action={<div className="flex items-center gap-2"><ImportLiabilitiesButton /><AddLiabilityDialog /></div>} />
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -117,9 +118,12 @@ export function LiabilitiesView() {
                       <td className="px-3 py-2.5 text-right font-mono text-muted-foreground tabular">{l.tenureMonthsRemaining}mo</td>
                       <td className="px-3 py-2.5 text-right font-mono text-rose-400 tabular">{fmtCurrency(futureInterest, sym)}</td>
                       <td className="px-3 py-2.5 text-right">
-                        <button onClick={() => useWealthOS.getState().removeLiability(l.id)} className="text-muted-foreground hover:text-rose-400 p-1">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <EditLiabilityButton liability={l} />
+                          <button onClick={() => useWealthOS.getState().removeLiability(l.id)} className="text-muted-foreground hover:text-rose-400 p-1">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -186,7 +190,24 @@ export function LiabilitiesView() {
 }
 
 function AddLiabilityDialog() {
+  return <LiabilityDialog mode="add" trigger={
+    <Button size="sm" className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">
+      <Plus className="w-3.5 h-3.5 mr-1" /> Add Liability
+    </Button>
+  } />;
+}
+
+function EditLiabilityButton({ liability }: { liability: Liability }) {
+  return <LiabilityDialog mode="edit" liability={liability} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1" title="Edit liability">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function LiabilityDialog({ mode, liability, trigger }: { mode: 'add' | 'edit'; liability?: Liability; trigger: React.ReactNode }) {
   const addLiability = useWealthOS(s => s.addLiability);
+  const updateLiability = useWealthOS(s => s.updateLiability);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -195,13 +216,29 @@ function AddLiabilityDialog() {
     interestRate: '', emi: '', tenureMonthsRemaining: '', startDate: new Date().toISOString().slice(0, 10),
   });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && liability) {
+      setForm({
+        name: liability.name,
+        type: liability.type,
+        outstandingBalance: liability.outstandingBalance.toString(),
+        originalPrincipal: liability.originalPrincipal.toString(),
+        interestRate: liability.interestRate.toString(),
+        emi: liability.emi.toString(),
+        tenureMonthsRemaining: liability.tenureMonthsRemaining.toString(),
+        startDate: liability.startDate,
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.name || !form.outstandingBalance) return;
     const principal = parseFloat(form.outstandingBalance) || 0;
     const rate = parseFloat(form.interestRate) || 0;
     const tenure = parseInt(form.tenureMonthsRemaining) || 12;
     const emiCalc = form.emi ? parseFloat(form.emi) : calculateEMI(principal, rate, tenure).emi;
-    addLiability({
+    const payload = {
       name: form.name,
       type: form.type,
       outstandingBalance: principal,
@@ -210,21 +247,21 @@ function AddLiabilityDialog() {
       emi: emiCalc,
       tenureMonthsRemaining: tenure,
       startDate: form.startDate,
-    });
-    setForm({ name: '', type: 'home_loan', outstandingBalance: '', originalPrincipal: '', interestRate: '', emi: '', tenureMonthsRemaining: '', startDate: new Date().toISOString().slice(0, 10) });
+    };
+    if (mode === 'edit' && liability) {
+      updateLiability(liability.id, payload);
+    } else {
+      addLiability(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">
-          <Plus className="w-3.5 h-3.5 mr-1" /> Add Liability
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-rose-400">Add Liability</DialogTitle>
+          <DialogTitle className="text-rose-400">{mode === 'edit' ? 'Edit Liability' : 'Add Liability'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -265,9 +302,20 @@ function AddLiabilityDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">Add</Button>
+          <Button onClick={submit} className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ImportLiabilitiesButton() {
+  const importLiabilities = useWealthOS(s => s.importLiabilities);
+  return <CSVImportDialog entityType="liabilities" onImport={importLiabilities} trigger={
+    <Button size="sm" variant="outline" className="bg-black/30 border-white/10 hover:bg-white/5 text-foreground">
+      <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
+    </Button>
+  } />;
 }

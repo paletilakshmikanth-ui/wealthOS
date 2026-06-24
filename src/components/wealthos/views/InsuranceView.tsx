@@ -3,14 +3,14 @@
 import { useWealthOS } from '@/lib/wealthos/store';
 import { computeKPIs, fmtCurrency, fmtPct } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar } from '../Primitives';
-import { ShieldCheck, Heart, Activity, Home, Car, Plus, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Heart, Activity, Home, Car, Plus, Trash2, AlertTriangle, CheckCircle2, PencilLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { useState } from 'react';
-import type { InsuranceType } from '@/lib/wealthos/types';
+import type { InsurancePolicy, InsuranceType } from '@/lib/wealthos/types';
 
 const INSURANCE_META: Record<InsuranceType, { label: string; icon: React.ElementType; color: string; recommended: string }> = {
   health:            { label: 'Health',            icon: Heart,        color: 'text-rose-400',    recommended: '₹10L-50L family floater' },
@@ -119,7 +119,10 @@ export function InsuranceView() {
                     <td className="px-3 py-2 text-right font-mono text-rose-400 tabular">{fmtCurrency(p.annualPremium, sym)}</td>
                     <td className="px-3 py-2 text-right font-mono text-muted-foreground tabular">{((p.annualPremium / p.coverageAmount) * 100).toFixed(2)}%</td>
                     <td className="px-3 py-2 text-right">
-                      <button onClick={() => useWealthOS.getState().removeInsurance(p.id)} className="text-muted-foreground hover:text-rose-400 p-1"><Trash2 className="w-3 h-3" /></button>
+                      <div className="flex items-center justify-end gap-1">
+                        <EditInsuranceButton policy={p} />
+                        <button onClick={() => useWealthOS.getState().removeInsurance(p.id)} className="text-muted-foreground hover:text-rose-400 p-1"><Trash2 className="w-3 h-3" /></button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -133,21 +136,59 @@ export function InsuranceView() {
 }
 
 function AddInsuranceDialog() {
+  return <InsuranceDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add Policy</Button>
+  } />;
+}
+
+function EditInsuranceButton({ policy }: { policy: InsurancePolicy }) {
+  return <InsuranceDialog mode="edit" policy={policy} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1" title="Edit policy">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function InsuranceDialog({ mode, policy, trigger }: { mode: 'add' | 'edit'; policy?: InsurancePolicy; trigger: React.ReactNode }) {
   const addInsurance = useWealthOS(s => s.addInsurance);
+  const updateInsurance = useWealthOS(s => s.updateInsurance);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ type: 'health' as InsuranceType, provider: '', coverageAmount: '', annualPremium: '' });
+
+  const handleOpenChange = (v: boolean) => {
+    if (v && policy) {
+      setForm({
+        type: policy.type,
+        provider: policy.provider,
+        coverageAmount: policy.coverageAmount.toString(),
+        annualPremium: policy.annualPremium.toString(),
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.provider || !form.coverageAmount) return;
-    addInsurance({ type: form.type, provider: form.provider, coverageAmount: parseFloat(form.coverageAmount) || 0, annualPremium: parseFloat(form.annualPremium) || 0 });
-    setForm({ type: 'health', provider: '', coverageAmount: '', annualPremium: '' });
+    const payload = {
+      type: form.type,
+      provider: form.provider,
+      coverageAmount: parseFloat(form.coverageAmount) || 0,
+      annualPremium: parseFloat(form.annualPremium) || 0,
+    };
+    if (mode === 'edit' && policy) {
+      updateInsurance(policy.id, payload);
+    } else {
+      addInsurance(payload);
+    }
     setOpen(false);
   };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add Policy</Button></DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-sm">
-        <DialogHeader><DialogTitle className="text-amber-400">Add Insurance Policy</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Insurance Policy' : 'Add Insurance Policy'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs text-muted-foreground">Provider</Label>
@@ -175,7 +216,9 @@ function AddInsuranceDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

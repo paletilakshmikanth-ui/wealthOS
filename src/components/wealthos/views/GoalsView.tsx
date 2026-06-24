@@ -9,7 +9,7 @@ import {
 } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar, DeltaPill, SeverityPill } from '../Primitives';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, RadialBarChart, RadialBar } from 'recharts';
-import { Target, Plus, Trash2, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Target, Plus, Trash2, AlertTriangle, CheckCircle2, Clock, PencilLine, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog';
+import { CSVImportDialog } from '../CSVImportDialog';
 import type { Goal, GoalType } from '@/lib/wealthos/types';
 
 const axisStyle = { fontSize: 10, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' as const };
@@ -80,7 +81,12 @@ export function GoalsView() {
           title="Goals Tracking"
           subtitle="Monitor progress and projections"
           icon={<Target className="w-4 h-4" />}
-          action={<AddGoalDialog />}
+          action={(
+            <div className="flex items-center gap-2">
+              <ImportGoalsButton />
+              <AddGoalDialog />
+            </div>
+          )}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {sortedByProgress.map(g => {
@@ -105,6 +111,7 @@ export function GoalsView() {
                         <AlertTriangle className="w-2.5 h-2.5 inline mr-0.5" /> Behind
                       </span>
                     )}
+                    <EditGoalButton goal={g} />
                     <button onClick={() => useWealthOS.getState().removeGoal(g.id)} className="text-muted-foreground hover:text-rose-400 p-1">
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -172,7 +179,24 @@ export function GoalsView() {
 }
 
 function AddGoalDialog() {
+  return <GoalDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+      <Plus className="w-3.5 h-3.5 mr-1" /> Add Goal
+    </Button>
+  } />;
+}
+
+function EditGoalButton({ goal }: { goal: Goal }) {
+  return <GoalDialog mode="edit" goal={goal} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1" title="Edit goal">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function GoalDialog({ mode, goal, trigger }: { mode: 'add' | 'edit'; goal?: Goal; trigger: React.ReactNode }) {
   const addGoal = useWealthOS(s => s.addGoal);
+  const updateGoal = useWealthOS(s => s.updateGoal);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -181,9 +205,25 @@ function AddGoalDialog() {
     expectedReturnRate: '10', priority: 'medium' as Goal['priority'],
   });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && goal) {
+      setForm({
+        name: goal.name,
+        type: goal.type,
+        targetAmount: goal.targetAmount.toString(),
+        currentAmount: goal.currentAmount.toString(),
+        monthlyContribution: goal.monthlyContribution.toString(),
+        targetDate: goal.targetDate,
+        expectedReturnRate: goal.expectedReturnRate.toString(),
+        priority: goal.priority,
+      });
+    }
+    setOpen(v);
+  };
+
   const submit = () => {
     if (!form.name || !form.targetAmount) return;
-    addGoal({
+    const payload = {
       name: form.name,
       type: form.type,
       targetAmount: parseFloat(form.targetAmount) || 0,
@@ -192,21 +232,21 @@ function AddGoalDialog() {
       targetDate: form.targetDate,
       expectedReturnRate: parseFloat(form.expectedReturnRate) || 0,
       priority: form.priority,
-    });
-    setForm({ name: '', type: 'other', targetAmount: '', currentAmount: '', monthlyContribution: '', targetDate: new Date().toISOString().slice(0, 10), expectedReturnRate: '10', priority: 'medium' });
+    };
+    if (mode === 'edit' && goal) {
+      updateGoal(goal.id, payload);
+    } else {
+      addGoal(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
-          <Plus className="w-3.5 h-3.5 mr-1" /> Add Goal
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-amber-400">Add Financial Goal</DialogTitle>
+          <DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Goal' : 'Add Financial Goal'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -263,9 +303,20 @@ function AddGoalDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add Goal</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add Goal'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ImportGoalsButton() {
+  const importGoals = useWealthOS(s => s.importGoals);
+  return <CSVImportDialog entityType="goals" onImport={importGoals} trigger={
+    <Button size="sm" variant="outline" className="bg-black/30 border-white/10 hover:bg-white/5 text-foreground">
+      <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
+    </Button>
+  } />;
 }

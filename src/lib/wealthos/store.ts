@@ -34,6 +34,11 @@ interface WealthOSActions {
   addAsset: (asset: Omit<Asset, 'id' | 'updatedAt'>) => void;
   updateAsset: (id: string, partial: Partial<Asset>) => void;
   removeAsset: (id: string) => void;
+  importAssets: (assets: Array<Omit<Asset, 'id' | 'updatedAt'>>) => void;
+  importLiabilities: (liabilities: Array<Omit<Liability, 'id'>>) => void;
+  importIncome: (income: Array<Omit<IncomeEntry, 'id'>>) => void;
+  importExpenses: (expenses: Array<Omit<ExpenseEntry, 'id'>>) => void;
+  importGoals: (goals: Array<Omit<Goal, 'id'>>) => void;
   addLiability: (liability: Omit<Liability, 'id'>) => void;
   updateLiability: (id: string, partial: Partial<Liability>) => void;
   removeLiability: (id: string) => void;
@@ -47,8 +52,10 @@ interface WealthOSActions {
   updateGoal: (id: string, partial: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
   addInsurance: (policy: Omit<InsurancePolicy, 'id'>) => void;
+  updateInsurance: (id: string, partial: Partial<InsurancePolicy>) => void;
   removeInsurance: (id: string) => void;
   addFamilyMember: (m: Omit<FamilyMember, 'id'>) => void;
+  updateFamilyMember: (id: string, partial: Partial<FamilyMember>) => void;
   removeFamilyMember: (id: string) => void;
   // Estate
   addEstateDocument: (d: Omit<EstateDocument, 'id'>) => void;
@@ -107,6 +114,18 @@ export const useWealthOS = create<WealthOSStore>()(
         })),
       removeAsset: (id) =>
         set((s) => ({ assets: s.assets.filter((a) => a.id !== id) })),
+      importAssets: (assets) =>
+        set((s) => ({
+          assets: [...s.assets, ...assets.map(a => ({ ...a, id: uid(), updatedAt: new Date().toISOString() }))],
+        })),
+      importLiabilities: (liabilities) =>
+        set((s) => ({ liabilities: [...s.liabilities, ...liabilities.map(l => ({ ...l, id: uid() }))] })),
+      importIncome: (income) =>
+        set((s) => ({ income: [...s.income, ...income.map(i => ({ ...i, id: uid() }))] })),
+      importExpenses: (expenses) =>
+        set((s) => ({ expenses: [...s.expenses, ...expenses.map(e => ({ ...e, id: uid() }))] })),
+      importGoals: (goals) =>
+        set((s) => ({ goals: [...s.goals, ...goals.map(g => ({ ...g, id: uid() }))] })),
 
       addLiability: (liability) =>
         set((s) => ({ liabilities: [...s.liabilities, { ...liability, id: uid() }] })),
@@ -146,11 +165,15 @@ export const useWealthOS = create<WealthOSStore>()(
 
       addInsurance: (policy) =>
         set((s) => ({ insurance: [...s.insurance, { ...policy, id: uid() }] })),
+      updateInsurance: (id, partial) =>
+        set((s) => ({ insurance: s.insurance.map(p => p.id === id ? { ...p, ...partial } : p) })),
       removeInsurance: (id) =>
         set((s) => ({ insurance: s.insurance.filter((p) => p.id !== id) })),
 
       addFamilyMember: (m) =>
         set((s) => ({ family: [...s.family, { ...m, id: uid() }] })),
+      updateFamilyMember: (id, partial) =>
+        set((s) => ({ family: s.family.map(m => m.id === id ? { ...m, ...partial } : m) })),
       removeFamilyMember: (id) =>
         set((s) => ({ family: s.family.filter((m) => m.id !== id) })),
 

@@ -14,13 +14,14 @@ import {
 } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, ProgressBar, DeltaPill } from '../Primitives';
 import { ResponsiveContainer, Sankey, Tooltip, BarChart, Bar, XAxis, YAxis, Cell, PieChart, Pie } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Plus, Trash2, Activity, Wallet, Repeat } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Plus, Trash2, Activity, Wallet, Repeat, PencilLine, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { CSVImportDialog } from '../CSVImportDialog';
 import { useState } from 'react';
 import type { IncomeEntry, IncomeSource, ExpenseEntry, ExpenseCategory, Frequency } from '@/lib/wealthos/types';
 
@@ -67,7 +68,7 @@ export function CashFlowView() {
       {/* Income sources + expense breakdown */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <GlassCard className="p-5">
-          <SectionHeader title="Income Sources" subtitle="All active income streams" icon={<ArrowUpRight className="w-4 h-4" />} action={<AddIncomeDialog />} />
+          <SectionHeader title="Income Sources" subtitle="All active income streams" icon={<ArrowUpRight className="w-4 h-4" />} action={<div className="flex items-center gap-2"><ImportIncomeButton /><AddIncomeDialog /></div>} />
           <div className="space-y-2">
             {state.income.filter(i => i.active).map(i => {
               const meta = INCOME_SOURCE_META[i.source];
@@ -93,9 +94,12 @@ export function CashFlowView() {
                       </span>
                     </div>
                   </div>
-                  <button onClick={() => useWealthOS.getState().removeIncome(i.id)} className="text-muted-foreground hover:text-rose-400 p-1 shrink-0">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <EditIncomeButton income={i} />
+                    <button onClick={() => useWealthOS.getState().removeIncome(i.id)} className="text-muted-foreground hover:text-rose-400 p-1 shrink-0">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -106,7 +110,7 @@ export function CashFlowView() {
         </GlassCard>
 
         <GlassCard className="p-5">
-          <SectionHeader title="Expense Breakdown" subtitle="Where your money goes" icon={<ArrowDownRight className="w-4 h-4" />} action={<AddExpenseDialog />} />
+          <SectionHeader title="Expense Breakdown" subtitle="Where your money goes" icon={<ArrowDownRight className="w-4 h-4" />} action={<div className="flex items-center gap-2"><ImportExpensesButton /><AddExpenseDialog /></div>} />
           <div className="grid grid-cols-2 gap-3">
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
@@ -127,6 +131,7 @@ export function CashFlowView() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="font-mono text-foreground">{fmtCurrency(monthly, sym)}<span className="text-[9px] text-muted-foreground">/mo</span></span>
+                      <EditExpenseButton expense={e} />
                       <button onClick={() => useWealthOS.getState().removeExpense(e.id)} className="text-muted-foreground hover:text-rose-400">
                         <Trash2 className="w-2.5 h-2.5" />
                       </button>
@@ -171,7 +176,22 @@ export function CashFlowView() {
 }
 
 function AddIncomeDialog() {
+  return <IncomeDialog mode="add" trigger={
+    <Button size="sm" className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button>
+  } />;
+}
+
+function EditIncomeButton({ income }: { income: IncomeEntry }) {
+  return <IncomeDialog mode="edit" income={income} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1 shrink-0" title="Edit income">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function IncomeDialog({ mode, income, trigger }: { mode: 'add' | 'edit'; income?: IncomeEntry; trigger: React.ReactNode }) {
   const addIncome = useWealthOS(s => s.addIncome);
+  const updateIncome = useWealthOS(s => s.updateIncome);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -182,6 +202,19 @@ function AddIncomeDialog() {
     customDays: '15',
   });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && income) {
+      setForm({
+        source: income.source,
+        label: income.label,
+        amount: income.amount.toString(),
+        frequency: income.frequency,
+        customDays: (income.customDays || 15).toString(),
+      });
+    }
+    setOpen(v);
+  };
+
   const monthlyPreview = toMonthly(
     parseFloat(form.amount) || 0,
     form.frequency,
@@ -190,23 +223,27 @@ function AddIncomeDialog() {
 
   const submit = () => {
     if (!form.label || !form.amount) return;
-    addIncome({
+    const payload = {
       source: form.source,
       label: form.label,
       amount: parseFloat(form.amount) || 0,
       frequency: form.frequency,
       customDays: form.frequency === 'custom' ? parseInt(form.customDays) || 30 : undefined,
       active: true,
-    });
-    setForm({ source: 'salary', label: '', amount: '', frequency: 'monthly', customDays: '15' });
+    };
+    if (mode === 'edit' && income) {
+      updateIncome(income.id, payload);
+    } else {
+      addIncome(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm" className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button></DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-sm">
-        <DialogHeader><DialogTitle className="text-emerald-400">Add Income Source</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-emerald-400">{mode === 'edit' ? 'Edit Income Source' : 'Add Income Source'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs text-muted-foreground">Label</Label>
@@ -255,15 +292,41 @@ function AddIncomeDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30">Add</Button>
+          <Button onClick={submit} className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
+function ImportIncomeButton() {
+  const importIncome = useWealthOS(s => s.importIncome);
+  return <CSVImportDialog entityType="income" onImport={importIncome} trigger={
+    <Button size="sm" variant="outline" className="bg-black/30 border-white/10 hover:bg-white/5 text-foreground">
+      <Upload className="w-3.5 h-3.5 mr-1" /> Import
+    </Button>
+  } />;
+}
+
 function AddExpenseDialog() {
+  return <ExpenseDialog mode="add" trigger={
+    <Button size="sm" className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button>
+  } />;
+}
+
+function EditExpenseButton({ expense }: { expense: ExpenseEntry }) {
+  return <ExpenseDialog mode="edit" expense={expense} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1" title="Edit expense">
+      <PencilLine className="w-2.5 h-2.5" />
+    </button>
+  } />;
+}
+
+function ExpenseDialog({ mode, expense, trigger }: { mode: 'add' | 'edit'; expense?: ExpenseEntry; trigger: React.ReactNode }) {
   const addExpense = useWealthOS(s => s.addExpense);
+  const updateExpense = useWealthOS(s => s.updateExpense);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -275,6 +338,20 @@ function AddExpenseDialog() {
     essential: true,
   });
 
+  const handleOpenChange = (v: boolean) => {
+    if (v && expense) {
+      setForm({
+        category: expense.category,
+        label: expense.label,
+        amount: expense.amount.toString(),
+        frequency: expense.frequency,
+        customDays: (expense.customDays || 15).toString(),
+        essential: expense.essential,
+      });
+    }
+    setOpen(v);
+  };
+
   const monthlyPreview = toMonthly(
     parseFloat(form.amount) || 0,
     form.frequency,
@@ -283,23 +360,27 @@ function AddExpenseDialog() {
 
   const submit = () => {
     if (!form.label || !form.amount) return;
-    addExpense({
+    const payload = {
       category: form.category,
       label: form.label,
       amount: parseFloat(form.amount) || 0,
       frequency: form.frequency,
       customDays: form.frequency === 'custom' ? parseInt(form.customDays) || 30 : undefined,
       essential: form.essential,
-    });
-    setForm({ category: 'food', label: '', amount: '', frequency: 'monthly', customDays: '15', essential: true });
+    };
+    if (mode === 'edit' && expense) {
+      updateExpense(expense.id, payload);
+    } else {
+      addExpense(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button size="sm" className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30"><Plus className="w-3.5 h-3.5 mr-1" /> Add</Button></DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-sm">
-        <DialogHeader><DialogTitle className="text-rose-400">Add Expense</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-rose-400">{mode === 'edit' ? 'Edit Expense' : 'Add Expense'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs text-muted-foreground">Label</Label>
@@ -352,9 +433,20 @@ function AddExpenseDialog() {
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">Add</Button>
+          <Button onClick={submit} className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ImportExpensesButton() {
+  const importExpenses = useWealthOS(s => s.importExpenses);
+  return <CSVImportDialog entityType="expenses" onImport={importExpenses} trigger={
+    <Button size="sm" variant="outline" className="bg-black/30 border-white/10 hover:bg-white/5 text-foreground">
+      <Upload className="w-3.5 h-3.5 mr-1" /> Import
+    </Button>
+  } />;
 }

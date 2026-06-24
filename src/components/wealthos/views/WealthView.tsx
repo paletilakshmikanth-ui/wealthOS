@@ -11,7 +11,7 @@ import {
 } from '@/lib/wealthos/engine';
 import { GlassCard, MetricLabel, MetricValue, SectionHeader, DeltaPill, ProgressBar } from '../Primitives';
 import { ResponsiveContainer, Treemap, Tooltip, BarChart, Bar, XAxis, YAxis, Cell } from 'recharts';
-import { Wallet, TrendingUp, Coins, Building2, Car, Plus, Trash2, ArrowUpRight } from 'lucide-react';
+import { Wallet, TrendingUp, Coins, Building2, Car, Plus, Trash2, ArrowUpRight, PencilLine, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog';
+import { CSVImportDialog } from '../CSVImportDialog';
 import type { Asset, AssetCategory } from '@/lib/wealthos/types';
 
 const axisStyle = { fontSize: 10, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' as const };
@@ -129,7 +130,7 @@ export function WealthView() {
           title="Holdings"
           subtitle="All tracked assets"
           icon={<Building2 className="w-4 h-4" />}
-          action={<AddAssetDialog />}
+          action={<div className="flex items-center gap-2"><ImportAssetsButton /><AddAssetDialog /></div>}
         />
         <div className="space-y-3">
           {Object.entries(grouped).map(([cat, group]) => (
@@ -186,7 +187,10 @@ export function WealthView() {
                             }`}>{a.liquidity}</span>
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <DeleteAssetButton id={a.id} name={a.name} />
+                            <div className="flex items-center justify-end gap-1">
+                              <EditAssetButton asset={a} />
+                              <DeleteAssetButton id={a.id} name={a.name} />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -225,22 +229,56 @@ function CustomTreemapContent(props: any) {
 }
 
 function AddAssetDialog() {
+  return <AssetDialog mode="add" trigger={
+    <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+      <Plus className="w-3.5 h-3.5 mr-1" /> Add Asset
+    </Button>
+  } />;
+}
+
+function EditAssetButton({ asset }: { asset: Asset }) {
+  return <AssetDialog mode="edit" asset={asset} trigger={
+    <button className="text-muted-foreground hover:text-amber-400 p-1" title="Edit asset">
+      <PencilLine className="w-3 h-3" />
+    </button>
+  } />;
+}
+
+function AssetDialog({ mode, asset, trigger }: { mode: 'add' | 'edit'; asset?: Asset; trigger: React.ReactNode }) {
   const addAsset = useWealthOS(s => s.addAsset);
+  const updateAsset = useWealthOS(s => s.updateAsset);
+  const importAssets = useWealthOS(s => s.importAssets);
   const sym = useWealthOS(s => s.settings.currencySymbol);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    name: '',
-    category: 'mutual_funds' as AssetCategory,
-    currentValue: '',
-    investedValue: '',
-    annualReturnRate: '10',
-    liquidity: 'high' as Asset['liquidity'],
-    notes: '',
+    name: asset?.name || '',
+    category: asset?.category || ('mutual_funds' as AssetCategory),
+    currentValue: asset?.currentValue?.toString() || '',
+    investedValue: asset?.investedValue?.toString() || '',
+    annualReturnRate: asset?.annualReturnRate?.toString() || '10',
+    liquidity: asset?.liquidity || ('high' as Asset['liquidity']),
+    notes: asset?.notes || '',
   });
+
+  // Reset form when dialog opens (so edit mode loads the latest values)
+  const handleOpenChange = (v: boolean) => {
+    if (v && asset) {
+      setForm({
+        name: asset.name,
+        category: asset.category,
+        currentValue: asset.currentValue.toString(),
+        investedValue: asset.investedValue.toString(),
+        annualReturnRate: asset.annualReturnRate.toString(),
+        liquidity: asset.liquidity,
+        notes: asset.notes || '',
+      });
+    }
+    setOpen(v);
+  };
 
   const submit = () => {
     if (!form.name || !form.currentValue) return;
-    addAsset({
+    const payload = {
       name: form.name,
       category: form.category,
       currentValue: parseFloat(form.currentValue) || 0,
@@ -248,21 +286,21 @@ function AddAssetDialog() {
       annualReturnRate: parseFloat(form.annualReturnRate) || 0,
       liquidity: form.liquidity,
       notes: form.notes,
-    });
-    setForm({ name: '', category: 'mutual_funds', currentValue: '', investedValue: '', annualReturnRate: '10', liquidity: 'high', notes: '' });
+    };
+    if (mode === 'edit' && asset) {
+      updateAsset(asset.id, payload);
+    } else {
+      addAsset(payload);
+    }
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
-          <Plus className="w-3.5 h-3.5 mr-1" /> Add Asset
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="glass-strong border-white/10 max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-amber-400">Add New Asset</DialogTitle>
+          <DialogTitle className="text-amber-400">{mode === 'edit' ? 'Edit Asset' : 'Add New Asset'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
@@ -308,14 +346,29 @@ function AddAssetDialog() {
               </Select>
             </div>
           </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Notes</Label>
+            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Optional" className="bg-black/30 border-white/10" />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} className="text-muted-foreground">Cancel</Button>
-          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">Add Asset</Button>
+          <Button onClick={submit} className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30">
+            {mode === 'edit' ? 'Save Changes' : 'Add Asset'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function ImportAssetsButton() {
+  const importAssets = useWealthOS(s => s.importAssets);
+  return <CSVImportDialog entityType="assets" onImport={importAssets} trigger={
+    <Button size="sm" variant="outline" className="bg-black/30 border-white/10 hover:bg-white/5 text-foreground">
+      <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
+    </Button>
+  } />;
 }
 
 function DeleteAssetButton({ id, name }: { id: string; name: string }) {
